@@ -1,0 +1,261 @@
+import { type Property, type InsertProperty, type Valuation, type InsertValuation, type PortfolioProperty, type InsertPortfolioProperty, type ChatMessage, type InsertChatMessage } from "@shared/schema";
+import { randomUUID } from "crypto";
+
+export interface IStorage {
+  // Properties
+  getProperties(filters?: Partial<Property>): Promise<Property[]>;
+  getProperty(id: string): Promise<Property | undefined>;
+  createProperty(property: InsertProperty): Promise<Property>;
+  updateProperty(id: string, property: Partial<Property>): Promise<Property | undefined>;
+  deleteProperty(id: string): Promise<boolean>;
+
+  // Valuations
+  getValuations(): Promise<Valuation[]>;
+  getValuation(id: string): Promise<Valuation | undefined>;
+  createValuation(valuation: InsertValuation): Promise<Valuation>;
+
+  // Portfolio
+  getPortfolioProperties(): Promise<PortfolioProperty[]>;
+  getPortfolioProperty(id: string): Promise<PortfolioProperty | undefined>;
+  createPortfolioProperty(portfolioProperty: InsertPortfolioProperty): Promise<PortfolioProperty>;
+  updatePortfolioProperty(id: string, portfolioProperty: Partial<PortfolioProperty>): Promise<PortfolioProperty | undefined>;
+  deletePortfolioProperty(id: string): Promise<boolean>;
+
+  // Chat
+  getChatMessages(): Promise<ChatMessage[]>;
+  createChatMessage(chatMessage: InsertChatMessage): Promise<ChatMessage>;
+}
+
+export class MemStorage implements IStorage {
+  private properties: Map<string, Property>;
+  private valuations: Map<string, Valuation>;
+  private portfolioProperties: Map<string, PortfolioProperty>;
+  private chatMessages: Map<string, ChatMessage>;
+
+  constructor() {
+    this.properties = new Map();
+    this.valuations = new Map();
+    this.portfolioProperties = new Map();
+    this.chatMessages = new Map();
+    this.seedData();
+  }
+
+  private seedData() {
+    // Seed some sample properties
+    const sampleProperties: Property[] = [
+      {
+        id: "1",
+        title: "Modern House in DHA Phase 6",
+        description: "Luxury 4-bedroom house with swimming pool and garden",
+        city: "Karachi",
+        area: "DHA Phase 6",
+        propertyType: "House",
+        bedrooms: 4,
+        bathrooms: 5,
+        areaSize: "5",
+        areaUnit: "marla",
+        price: "25000000",
+        yearBuilt: 2020,
+        features: ["Parking", "Garden", "Security", "Generator"],
+        images: ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400"],
+        location: { lat: 24.8607, lng: 67.0011 },
+        aiScore: 94,
+        expectedROI: "12.5",
+        rentalYield: "7.2",
+        marketTrend: "Bullish",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: "2",
+        title: "Luxury Flat in Gulberg III",
+        description: "3-bedroom apartment with modern amenities",
+        city: "Lahore",
+        area: "Gulberg III",
+        propertyType: "Flat",
+        bedrooms: 3,
+        bathrooms: 4,
+        areaSize: "2100",
+        areaUnit: "sq ft",
+        price: "18000000",
+        yearBuilt: 2019,
+        features: ["Parking", "Security", "Elevator", "Generator"],
+        images: ["https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400"],
+        location: { lat: 31.5204, lng: 74.3587 },
+        aiScore: 89,
+        expectedROI: "10.8",
+        rentalYield: "6.5",
+        marketTrend: "Stable",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: "3",
+        title: "Penthouse in F-11 Markaz",
+        description: "4-bedroom penthouse with city view",
+        city: "Islamabad",
+        area: "F-11 Markaz",
+        propertyType: "Penthouse",
+        bedrooms: 4,
+        bathrooms: 5,
+        areaSize: "2500",
+        areaUnit: "sq ft",
+        price: "32000000",
+        yearBuilt: 2021,
+        features: ["Parking", "Security", "Elevator", "Pool"],
+        images: ["https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400"],
+        location: { lat: 33.6844, lng: 73.0479 },
+        aiScore: 96,
+        expectedROI: "15.2",
+        rentalYield: "5.8",
+        marketTrend: "Bullish",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    sampleProperties.forEach(property => {
+      this.properties.set(property.id, property);
+    });
+  }
+
+  // Properties methods
+  async getProperties(filters?: Partial<Property>): Promise<Property[]> {
+    let properties = Array.from(this.properties.values());
+    
+    if (filters) {
+      properties = properties.filter(property => {
+        return Object.entries(filters).every(([key, value]) => {
+          if (value === undefined) return true;
+          return property[key as keyof Property] === value;
+        });
+      });
+    }
+    
+    return properties;
+  }
+
+  async getProperty(id: string): Promise<Property | undefined> {
+    return this.properties.get(id);
+  }
+
+  async createProperty(property: InsertProperty): Promise<Property> {
+    const id = randomUUID();
+    const newProperty: Property = {
+      ...property,
+      id,
+      description: property.description || null,
+      areaUnit: property.areaUnit || "marla",
+      yearBuilt: property.yearBuilt || null,
+      features: property.features ? (property.features as string[]) : null,
+      images: property.images ? (property.images as string[]) : null,
+      location: property.location || null,
+      aiScore: property.aiScore || null,
+      expectedROI: property.expectedROI || null,
+      rentalYield: property.rentalYield || null,
+      marketTrend: property.marketTrend || null,
+      isActive: property.isActive !== undefined ? property.isActive : true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.properties.set(id, newProperty);
+    return newProperty;
+  }
+
+  async updateProperty(id: string, property: Partial<Property>): Promise<Property | undefined> {
+    const existing = this.properties.get(id);
+    if (!existing) return undefined;
+    
+    const updated = { ...existing, ...property, updatedAt: new Date() };
+    this.properties.set(id, updated);
+    return updated;
+  }
+
+  async deleteProperty(id: string): Promise<boolean> {
+    return this.properties.delete(id);
+  }
+
+  // Valuations methods
+  async getValuations(): Promise<Valuation[]> {
+    return Array.from(this.valuations.values());
+  }
+
+  async getValuation(id: string): Promise<Valuation | undefined> {
+    return this.valuations.get(id);
+  }
+
+  async createValuation(valuation: InsertValuation): Promise<Valuation> {
+    const id = randomUUID();
+    const newValuation: Valuation = {
+      ...valuation,
+      id,
+      areaUnit: valuation.areaUnit || "marla",
+      yearBuilt: valuation.yearBuilt || null,
+      features: valuation.features ? (valuation.features as string[]) : null,
+      insights: valuation.insights ? (valuation.insights as string[]) : null,
+      predictionTimeline: valuation.predictionTimeline || "current",
+      createdAt: new Date(),
+    };
+    this.valuations.set(id, newValuation);
+    return newValuation;
+  }
+
+  // Portfolio methods
+  async getPortfolioProperties(): Promise<PortfolioProperty[]> {
+    return Array.from(this.portfolioProperties.values());
+  }
+
+  async getPortfolioProperty(id: string): Promise<PortfolioProperty | undefined> {
+    return this.portfolioProperties.get(id);
+  }
+
+  async createPortfolioProperty(portfolioProperty: InsertPortfolioProperty): Promise<PortfolioProperty> {
+    const id = randomUUID();
+    const newPortfolioProperty: PortfolioProperty = {
+      ...portfolioProperty,
+      id,
+      monthlyRent: portfolioProperty.monthlyRent || null,
+      propertyId: portfolioProperty.propertyId || null,
+      isRented: portfolioProperty.isRented || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.portfolioProperties.set(id, newPortfolioProperty);
+    return newPortfolioProperty;
+  }
+
+  async updatePortfolioProperty(id: string, portfolioProperty: Partial<PortfolioProperty>): Promise<PortfolioProperty | undefined> {
+    const existing = this.portfolioProperties.get(id);
+    if (!existing) return undefined;
+    
+    const updated = { ...existing, ...portfolioProperty, updatedAt: new Date() };
+    this.portfolioProperties.set(id, updated);
+    return updated;
+  }
+
+  async deletePortfolioProperty(id: string): Promise<boolean> {
+    return this.portfolioProperties.delete(id);
+  }
+
+  // Chat methods
+  async getChatMessages(): Promise<ChatMessage[]> {
+    return Array.from(this.chatMessages.values());
+  }
+
+  async createChatMessage(chatMessage: InsertChatMessage): Promise<ChatMessage> {
+    const id = randomUUID();
+    const newChatMessage: ChatMessage = {
+      ...chatMessage,
+      id,
+      context: chatMessage.context || null,
+      createdAt: new Date(),
+    };
+    this.chatMessages.set(id, newChatMessage);
+    return newChatMessage;
+  }
+}
+
+export const storage = new MemStorage();
