@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertPropertySchema, insertValuationSchema, insertPortfolioPropertySchema, insertChatMessageSchema } from "@shared/schema";
 import { calculatePropertyValuation, predictMarketTrends, calculateROI, type PropertyValuationInput } from "./services/mlModels";
 import { getChatResponse, analyzePakistaniPropertyMarket } from "./services/openai";
+import { mlService, type PropertyValuationRequest } from "./ml/trainingService";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Properties routes
@@ -59,8 +60,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Valuation routes
+  // ML Training and Model Management routes
+  app.post("/api/ml/train-models", async (req, res) => {
+    try {
+      const result = await mlService.trainModels();
+      res.json(result);
+    } catch (error) {
+      console.error("Error training models:", error);
+      res.status(500).json({ message: "Failed to start model training" });
+    }
+  });
+
+  app.get("/api/ml/training-status", async (req, res) => {
+    try {
+      const status = mlService.getTrainingStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting training status:", error);
+      res.status(500).json({ message: "Failed to get training status" });
+    }
+  });
+
+  // Enhanced ML-based property valuation
   app.post("/api/ml/property-valuation", async (req, res) => {
+    try {
+      const request: PropertyValuationRequest = req.body;
+      
+      // Validate required fields
+      if (!request.location || !request.propertyType || !request.areaMarla) {
+        return res.status(400).json({ message: "Missing required fields: location, propertyType, areaMarla" });
+      }
+
+      if (!request.yearBuilt || !request.bedrooms || !request.bathrooms) {
+        return res.status(400).json({ message: "Missing required fields: yearBuilt, bedrooms, bathrooms" });
+      }
+
+      // Check if model is trained
+      const status = mlService.getTrainingStatus();
+      if (!status.hasModel) {
+        return res.status(503).json({ 
+          message: "ML models not trained yet. Please train the models first.",
+          shouldTrain: true
+        });
+      }
+
+      const result = await mlService.predictPrice(request);
+      
+      // Store valuation in database
+      const valuationData = {
+        city: request.city || "Karachi",
+        area: request.neighbourhood,
+        propertyType: request.propertyType,
+        bedrooms: request.bedrooms,
+        bathrooms: request.bathrooms,
+        areaSize: request.areaMarla.toString(),
+        areaUnit: "marla",
+        yearBuilt: request.yearBuilt,
+        features: null,
+        estimatedValue: result.predictedPrice.toString(),
+        confidenceScore: result.confidence / 100,
+        priceRange: result.priceRange,
+        marketAnalysis: `Market trend: ${result.marketTrend}. ${result.insights.join('. ')}`,
+        insights: result.insights,
+        predictionTimeline: JSON.stringify(result.predictions),
+      };
+      
+      await storage.createValuation(valuationData);
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error calculating ML valuation:", error);
+      res.status(500).json({ message: "Failed to calculate property valuation" });
+    }
+  });
+
+  // Legacy valuation route (backup for old frontend)
+  app.post("/api/ml/property-valuation-legacy", async (req, res) => {
     try {
       const input: PropertyValuationInput = req.body;
       
