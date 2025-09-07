@@ -1,5 +1,4 @@
-import { useState } from "react";
-import * as React from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,14 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
-import { useValuation } from "@/hooks/useValuation";
+import { Loader2, Brain, TrendingUp, Home, MapPin } from "lucide-react";
 import { PAKISTANI_CITIES, PROPERTY_TYPES, BEDROOM_OPTIONS, BATHROOM_OPTIONS, formatCurrency } from "@/lib/constants";
+import { apiRequest } from "@/lib/queryClient";
 
-const valuationSchema = z.object({
+const mlValuationSchema = z.object({
   city: z.string().min(1, "City is required"),
   location: z.string().min(1, "Location is required"),
   neighbourhood: z.string().min(1, "Neighbourhood is required"),
@@ -27,7 +23,7 @@ const valuationSchema = z.object({
   province: z.string().default("Sindh"),
 });
 
-type ValuationFormData = z.infer<typeof valuationSchema>;
+type MLValuationFormData = z.infer<typeof mlValuationSchema>;
 
 interface MLValuationResult {
   predictedPrice: number;
@@ -53,14 +49,23 @@ interface MLValuationResult {
   insights: string[];
 }
 
-export default function ValuationForm() {
-  const [result, setResult] = useState<MLValuationResult | null>(null);
-  const [trainingStatus, setTrainingStatus] = useState<{ isTraining: boolean; hasModel: boolean; modelInfo?: any }>({ isTraining: false, hasModel: false });
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
-  const valuationMutation = useValuation();
+interface TrainingStatus {
+  isTraining: boolean;
+  hasModel: boolean;
+  modelInfo?: {
+    bestModel: string;
+    accuracy: number;
+  };
+}
 
-  const form = useForm<ValuationFormData>({
-    resolver: zodResolver(valuationSchema),
+export default function MLValuationForm() {
+  const [result, setResult] = useState<MLValuationResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [trainingStatus, setTrainingStatus] = useState<TrainingStatus>({ isTraining: false, hasModel: false });
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+
+  const form = useForm<MLValuationFormData>({
+    resolver: zodResolver(mlValuationSchema),
     defaultValues: {
       city: "Karachi",
       province: "Sindh",
@@ -68,10 +73,10 @@ export default function ValuationForm() {
   });
 
   // Check training status on component mount
-  React.useEffect(() => {
+  useEffect(() => {
     const checkTrainingStatus = async () => {
       try {
-        const response = await fetch('/api/ml/training-status');
+        const response = await apiRequest('GET', '/api/ml/training-status');
         const status = await response.json();
         setTrainingStatus(status);
       } catch (error) {
@@ -86,10 +91,7 @@ export default function ValuationForm() {
   const startTraining = async () => {
     try {
       setTrainingStatus(prev => ({ ...prev, isTraining: true }));
-      const response = await fetch('/api/ml/train-models', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const response = await apiRequest('POST', '/api/ml/train-models');
       const result = await response.json();
       
       if (result.success) {
@@ -104,30 +106,32 @@ export default function ValuationForm() {
     }
   };
 
-  const onSubmit = async (data: ValuationFormData) => {
+  const onSubmit = async (data: MLValuationFormData) => {
     try {
-      const requestData = {
-        ...data,
-        // Map the form field to the API expected field
-        neighbourhood: data.location
-      };
-      const result = await valuationMutation.mutateAsync(requestData);
+      setIsLoading(true);
+      const response = await apiRequest('POST', '/api/ml/property-valuation', data);
+      const result = await response.json();
       setResult(result);
     } catch (error) {
       console.error("Valuation error:", error);
       // Check if it's a training error
-      if (error.message?.includes('train')) {
+      if ((error as any)?.message?.includes('train')) {
         setTrainingStatus({ isTraining: false, hasModel: false });
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
       <div className="text-center mb-16">
-        <h2 className="text-4xl font-bold text-primary mb-4">AI Property Valuation Tool</h2>
+        <h2 className="text-4xl font-bold text-primary mb-4 flex items-center justify-center gap-3">
+          <Brain className="h-8 w-8" />
+          AI Property Valuation Tool
+        </h2>
         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-          Get instant, accurate property valuations using our advanced machine learning models trained on extensive Pakistani real estate data.
+          Get instant, accurate property valuations using our advanced machine learning models trained on 168K+ Pakistani real estate records.
         </p>
       </div>
       
@@ -135,7 +139,10 @@ export default function ValuationForm() {
         {/* Valuation Form */}
         <Card>
           <CardHeader>
-            <CardTitle>Property Details</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Home className="h-5 w-5" />
+              Property Details
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -262,7 +269,7 @@ export default function ValuationForm() {
                         <FormMessage />
                       </FormItem>
                     )}
-                  />,
+                  />
                   
                   <FormField
                     control={form.control}
@@ -315,82 +322,81 @@ export default function ValuationForm() {
                   />
                 </div>
                 
-                {/* Additional Features */}
-                <FormField
-                  control={form.control}
-                  name="features"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Additional Features</FormLabel>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {PROPERTY_FEATURES.map((feature) => (
-                          <div key={feature} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={feature}
-                              checked={field.value?.includes(feature)}
-                              onCheckedChange={(checked) => {
-                                const updatedFeatures = checked
-                                  ? [...(field.value || []), feature]
-                                  : field.value?.filter((f) => f !== feature) || [];
-                                field.onChange(updatedFeatures);
-                              }}
-                              data-testid={`checkbox-${feature.toLowerCase().replace(" ", "-")}`}
-                            />
-                            <Label htmlFor={feature} className="text-sm">
-                              {feature}
-                            </Label>
-                          </div>
-                        ))}
+                {/* ML Training Status */}
+                {isCheckingStatus ? (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span>Checking ML model status...</span>
+                  </div>
+                ) : !trainingStatus.hasModel ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="font-semibold text-yellow-800 flex items-center gap-2">
+                          <Brain className="h-4 w-4" />
+                          ML Models Not Trained
+                        </h4>
+                        <p className="text-sm text-yellow-700 mt-1">
+                          Train machine learning models on 168K+ real estate records to get accurate predictions
+                        </p>
                       </div>
-                    </FormItem>
-                  )}
-                />
-                
-                {/* Prediction Timeline */}
-                <FormField
-                  control={form.control}
-                  name="predictionTimeline"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prediction Timeline</FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex space-x-4"
-                        >
-                          {PREDICTION_TIMELINES.map((timeline) => (
-                            <div key={timeline.value} className="flex items-center space-x-2">
-                              <RadioGroupItem 
-                                value={timeline.value} 
-                                id={timeline.value}
-                                data-testid={`radio-${timeline.value}`}
-                              />
-                              <Label htmlFor={timeline.value} className="text-sm">
-                                {timeline.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                      <Button 
+                        onClick={startTraining}
+                        disabled={trainingStatus.isTraining}
+                        variant="outline"
+                        size="sm"
+                        data-testid="button-train-models"
+                      >
+                        {trainingStatus.isTraining ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Training...
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="mr-2 h-4 w-4" />
+                            Train Models
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {trainingStatus.isTraining && (
+                      <div className="text-sm text-yellow-700">
+                        Training multiple ML models (Decision Tree, Random Forest, XGBoost, Deep Learning)...
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-green-800">
+                        ML Models Ready: {trainingStatus.modelInfo?.bestModel} 
+                        (Accuracy: {((trainingStatus.modelInfo?.accuracy || 0) * 100).toFixed(1)}%)
+                      </span>
+                    </div>
+                  </div>
+                )}
                 
                 <Button 
                   type="submit" 
                   className="w-full" 
                   size="lg" 
-                  disabled={valuationMutation.isPending}
+                  disabled={isLoading || !trainingStatus.hasModel}
                   data-testid="button-get-valuation"
                 >
-                  {valuationMutation.isPending ? (
+                  {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Calculating...
+                      Calculating with ML Models...
                     </>
+                  ) : !trainingStatus.hasModel ? (
+                    "Train Models First"
                   ) : (
-                    "Get Detailed AI Valuation"
+                    <>
+                      <Brain className="mr-2 h-4 w-4" />
+                      Get AI Property Valuation
+                    </>
                   )}
                 </Button>
               </form>
@@ -401,16 +407,19 @@ export default function ValuationForm() {
         {/* Valuation Results */}
         <Card>
           <CardHeader>
-            <CardTitle>AI Valuation Report</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              AI Valuation Report
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {result ? (
               <div className="space-y-6">
                 {/* Main Valuation */}
                 <div className="text-center bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-xl p-6">
-                  <div className="text-sm opacity-90 mb-2">Estimated Market Value</div>
-                  <div className="text-4xl font-bold mb-2" data-testid="valuation-estimated-value">
-                    {formatCurrency(result.estimatedValue)}
+                  <div className="text-sm opacity-90 mb-2">ML Predicted Value</div>
+                  <div className="text-4xl font-bold mb-2" data-testid="valuation-predicted-price">
+                    {formatCurrency(result.predictedPrice)}
                   </div>
                   <div className="text-sm opacity-90">
                     Range: {formatCurrency(result.priceRange.min)} - {formatCurrency(result.priceRange.max)}
@@ -420,15 +429,15 @@ export default function ValuationForm() {
                 {/* Confidence Score */}
                 <div className="bg-muted rounded-lg p-6">
                   <div className="flex justify-between items-center mb-3">
-                    <span className="font-medium">AI Confidence Score</span>
+                    <span className="font-medium">ML Model Confidence</span>
                     <span className="text-2xl font-bold text-green-600" data-testid="valuation-confidence-score">
-                      {result.confidenceScore}/100
+                      {result.confidence}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
                     <div 
                       className="bg-green-600 h-3 rounded-full" 
-                      style={{ width: `${result.confidenceScore}%` }}
+                      style={{ width: `${result.confidence}%` }}
                     ></div>
                   </div>
                 </div>
@@ -438,41 +447,81 @@ export default function ValuationForm() {
                   <div className="bg-primary/10 rounded-lg p-4 text-center">
                     <div className="text-sm text-muted-foreground mb-1">Price per Marla</div>
                     <div className="text-lg font-bold text-primary">
-                      {formatCurrency(result.estimatedValue / (form.getValues("areaSize") || 1))}
+                      {formatCurrency(result.predictedPrice / (form.getValues("areaMarla") || 1))}
                     </div>
                   </div>
                   <div className="bg-green-50 rounded-lg p-4 text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Location Score</div>
+                    <div className="text-sm text-muted-foreground mb-1">Market Trend</div>
                     <div className="text-lg font-bold text-green-600">
-                      {result.marketAnalysis.locationScore}/10
+                      {result.marketTrend}
                     </div>
                   </div>
                 </div>
                 
-                {/* Market Analysis */}
+                {/* Future Predictions */}
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-primary">Market Analysis</h4>
+                  <h4 className="font-semibold text-primary">Price Predictions</h4>
                   
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">Current</div>
+                      <div className="text-sm font-bold text-blue-600">
+                        {formatCurrency(result.predictions.currentYear)}
+                      </div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">1 Year</div>
+                      <div className="text-sm font-bold text-green-600">
+                        {formatCurrency(result.predictions.oneYear)}
+                      </div>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">2 Years</div>
+                      <div className="text-sm font-bold text-orange-600">
+                        {formatCurrency(result.predictions.twoYear)}
+                      </div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">3 Years</div>
+                      <div className="text-sm font-bold text-purple-600">
+                        {formatCurrency(result.predictions.threeYear)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Comparable Properties */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-primary flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Comparable Properties
+                  </h4>
                   <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Market Trend:</span>
-                      <span className="font-semibold text-green-600">{result.marketAnalysis.marketTrend}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Liquidity:</span>
-                      <span className="font-semibold text-orange-600">{result.marketAnalysis.liquidity}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Investment Grade:</span>
-                      <span className="font-semibold text-green-600">{result.marketAnalysis.investmentGrade}</span>
-                    </div>
+                    {result.comparableProperties.map((property, index) => (
+                      <div key={index} className="bg-muted/50 rounded-lg p-3">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="font-medium">{property.location}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {property.areaMarla} Marla • {property.bedrooms} Bed • {property.bathrooms} Bath
+                            </div>
+                          </div>
+                          <div className="font-bold text-primary">
+                            {formatCurrency(property.price)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 
                 {/* AI Insights */}
-                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                  <h4 className="font-semibold text-yellow-800 mb-2">AI Insights</h4>
-                  <ul className="text-sm text-yellow-700 space-y-1">
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                  <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+                    <Brain className="h-4 w-4" />
+                    ML Model Insights
+                  </h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
                     {result.insights.map((insight, index) => (
                       <li key={index}>• {insight}</li>
                     ))}
@@ -481,11 +530,12 @@ export default function ValuationForm() {
               </div>
             ) : (
               <div className="text-center py-12">
+                <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <div className="text-muted-foreground mb-4">
                   Fill out the form to get your AI-powered property valuation
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Our advanced machine learning models will analyze your property and provide accurate market insights
+                  Our ML models analyze 168K+ real estate records using Decision Tree, Random Forest, XGBoost, and Deep Learning algorithms to provide accurate valuations
                 </div>
               </div>
             )}

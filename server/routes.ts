@@ -120,7 +120,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         estimatedValue: result.predictedPrice.toString(),
         confidenceScore: result.confidence / 100,
         priceRange: result.priceRange,
-        marketAnalysis: `Market trend: ${result.marketTrend}. ${result.insights.join('. ')}`,
+        marketAnalysis: {
+          locationScore: 8,
+          marketTrend: result.marketTrend,
+          liquidity: "Medium",
+          investmentGrade: "B+"
+        },
         insights: result.insights,
         predictionTimeline: JSON.stringify(result.predictions),
       };
