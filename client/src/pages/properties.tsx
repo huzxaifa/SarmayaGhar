@@ -42,14 +42,13 @@ export default function Properties() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
               <Select 
-                value={filters.city || ""} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, city: value || undefined }))}
+                value={filters.city} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, city: value }))}
               >
                 <SelectTrigger data-testid="select-filter-city">
                   <SelectValue placeholder="All Cities" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Cities</SelectItem>
                   {PAKISTANI_CITIES.map((city) => (
                     <SelectItem key={city} value={city}>
                       {city}
@@ -59,14 +58,13 @@ export default function Properties() {
               </Select>
 
               <Select 
-                value={filters.propertyType || ""} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, propertyType: value || undefined }))}
+                value={filters.propertyType} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, propertyType: value }))}
               >
                 <SelectTrigger data-testid="select-filter-property-type">
                   <SelectValue placeholder="Property Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
                   {PROPERTY_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
@@ -76,14 +74,13 @@ export default function Properties() {
               </Select>
 
               <Select 
-                value={filters.bedrooms?.toString() || ""} 
+                value={filters.bedrooms?.toString()} 
                 onValueChange={(value) => setFilters(prev => ({ ...prev, bedrooms: value ? parseInt(value) : undefined }))}
               >
                 <SelectTrigger data-testid="select-filter-bedrooms">
                   <SelectValue placeholder="Bedrooms" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
                   {BEDROOM_OPTIONS.map((num) => (
                     <SelectItem key={num} value={num.toString()}>
                       {num}

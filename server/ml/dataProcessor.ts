@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import * as Papa from 'papaparse';
+import { parse } from 'papaparse';
 import * as path from 'path';
 
 export interface PropertyData {
@@ -56,7 +56,7 @@ export class PropertyDataProcessor {
     console.log('Loading dataset from:', csvPath);
     
     const csvContent = fs.readFileSync(csvPath, 'utf8');
-    const parseResult = Papa.parse(csvContent, {
+    const parseResult = parse(csvContent, {
       header: true,
       skipEmptyLines: true,
       transformHeader: (header: string) => header.toLowerCase().replace(/\s+/g, '_')
