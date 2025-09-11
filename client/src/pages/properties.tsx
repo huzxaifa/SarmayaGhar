@@ -152,17 +152,24 @@ export default function Properties() {
             </CardContent>
           </Card>
         ) : (
-          <>
-            <div className="mb-6 text-muted-foreground">
-              Showing {properties.length} properties
-              {Object.keys(appliedFilters).length > 0 && " (filtered)"}
+          <section className="bg-muted rounded-xl p-8">
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-primary mb-2">Available Properties</h2>
+                  <div className="text-muted-foreground">
+                    Showing {properties.length} properties
+                    {Object.keys(appliedFilters).length > 0 && " (filtered)"}
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {properties.map((property) => (
                 <PropertyCard key={property.id} property={property} />
               ))}
             </div>
-          </>
+          </section>
         )}
       </div>
     </div>
