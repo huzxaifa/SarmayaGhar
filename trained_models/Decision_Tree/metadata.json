@@ -1,7 +1,3 @@
-{
-  "name": "Decision Tree",
-  "r2Score": 0.03893790084267612,
-  "mse": 134472023046080.61,
-  "mae": 9062147.983203528,
-  "generatedAt": "2025-09-19T05:55:49.869Z"
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:3cde721b34171ddd12a633d4ea5c6d329d4613716f64be7bf48184a5cb50dddd
+size 165

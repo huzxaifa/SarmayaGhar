@@ -1,7 +1,3 @@
-{
-  "name": "Random Forest",
-  "r2Score": -0.0000010388303275377098,
-  "mse": 139920368161020.92,
-  "mae": 9222076.280557606,
-  "generatedAt": "2025-09-19T08:46:29.412Z"
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:52d1320460f98bd2b70f9e9fd7965aff70a93d1d9f483482db826b0af765d4b6
+size 171
