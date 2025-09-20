@@ -14,7 +14,7 @@ import { apiRequest } from "@/lib/queryClient";
 const mlValuationSchema = z.object({
   city: z.string().min(1, "City is required"),
   location: z.string().min(1, "Location is required"),
-  neighbourhood: z.string().min(1, "Neighbourhood is required"),
+  neighbourhood: z.string().optional(),
   propertyType: z.string().min(1, "Property type is required"),
   yearBuilt: z.coerce.number().min(1900, "Year built is required and must be after 1900"),
   areaMarla: z.coerce.number().min(0.1, "Area size must be greater than 0"),
