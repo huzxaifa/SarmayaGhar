@@ -2,6 +2,7 @@ import { PropertyDataProcessor } from './dataProcessor';
 import { MLModelTrainer, type TrainedModel } from './models';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as tf from '@tensorflow/tfjs';
 
 export interface PropertyValuationRequest {
   yearBuilt: number;
@@ -43,6 +44,14 @@ export class MLTrainingService {
   private trainedModel: TrainedModel | null = null;
   private isTraining = false;
   private processor = new PropertyDataProcessor();
+  private trainedModelsDir = path.join(process.cwd(), 'trained_models');
+
+  constructor() {
+    // attempt to load saved model at startup
+    this.loadSavedModelIfExists().catch(err => {
+      console.warn('Failed to load saved model at startup:', err);
+    });
+  }
 
   // Train models and select the best one
   public async trainModels(): Promise<{ success: boolean; message: string; modelInfo?: any }> {
@@ -325,8 +334,89 @@ export class MLTrainingService {
   // Initialize training on startup (optional)
   public async initializeIfNeeded(): Promise<void> {
     if (!this.trainedModel && !this.isTraining) {
-      console.log('No trained model found, starting training...');
-      await this.trainModels();
+      console.log('No trained model found in-memory; checking disk...');
+      const loaded = await this.loadSavedModelIfExists();
+      if (!loaded) {
+        console.log('No saved model found, starting training...');
+        await this.trainModels();
+      } else {
+        console.log('Loaded saved model from disk; skipping training.');
+      }
+    }
+  }
+
+  // Attempt to find a saved model in trained_models and load the best one
+  private async loadSavedModelIfExists(): Promise<boolean> {
+    try {
+      if (!fs.existsSync(this.trainedModelsDir)) return false;
+
+      const subdirs = await fs.promises.readdir(this.trainedModelsDir, { withFileTypes: true });
+      const candidates: { dir: string; meta: any }[] = [];
+
+      for (const d of subdirs) {
+        if (!d.isDirectory()) continue;
+        const metaPath = path.join(this.trainedModelsDir, d.name, 'metadata.json');
+        if (!fs.existsSync(metaPath)) continue;
+        try {
+          const metaRaw = await fs.promises.readFile(metaPath, 'utf8');
+          const meta = JSON.parse(metaRaw);
+          candidates.push({ dir: path.join(this.trainedModelsDir, d.name), meta });
+        } catch (e) {
+          // ignore malformed metadata
+        }
+      }
+
+      if (candidates.length === 0) return false;
+
+      // Pick best by r2Score
+      candidates.sort((a, b) => (b.meta.r2Score || b.meta.accuracy || 0) - (a.meta.r2Score || a.meta.accuracy || 0));
+      const best = candidates[0];
+
+      // Try to load TF model if model.json exists
+      const modelJsonPath = path.join(best.dir, 'model.json');
+      if (fs.existsSync(modelJsonPath)) {
+        try {
+          const modelUrl = `file://${modelJsonPath}`;
+          // tf.loadLayersModel expects URL pointing to model.json
+          const loaded = await tf.loadLayersModel(modelUrl);
+          this.trainedModel = {
+            name: best.meta.name || path.basename(best.dir),
+            model: loaded,
+            accuracy: best.meta.r2Score || best.meta.accuracy || 0,
+            scalingParams: best.meta.scalingParams || null,
+            encodingMaps: best.meta.encodingMaps || null
+          } as TrainedModel;
+          console.log(`Loaded TF model from ${best.dir}`);
+          return true;
+        } catch (err) {
+          console.warn('Failed to load TF model from disk:', err);
+        }
+      }
+
+      // If non-TF serialized model exists, load metadata and basic model object
+      const modelJson = path.join(best.dir, 'model.json');
+      if (fs.existsSync(modelJson)) {
+        try {
+          const raw = await fs.promises.readFile(modelJson, 'utf8');
+          const parsed = JSON.parse(raw);
+          this.trainedModel = {
+            name: best.meta.name || path.basename(best.dir),
+            model: parsed.model || parsed,
+            accuracy: best.meta.r2Score || best.meta.accuracy || 0,
+            scalingParams: best.meta.scalingParams || null,
+            encodingMaps: best.meta.encodingMaps || null
+          } as TrainedModel;
+          console.log(`Loaded serialized model from ${best.dir}`);
+          return true;
+        } catch (err) {
+          // ignore parse errors
+        }
+      }
+
+      return false;
+    } catch (err) {
+      console.warn('Error scanning trained_models folder:', err);
+      return false;
     }
   }
 }

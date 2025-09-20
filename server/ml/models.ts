@@ -1,4 +1,7 @@
-import * as tf from '@tensorflow/tfjs-node';
+import * as tf from '@tensorflow/tfjs';
+import * as fs from 'fs';
+import * as path from 'path';
+
 
 export interface ModelResult {
   name: string;
@@ -193,17 +196,122 @@ export class MLModelTrainer {
 
   // Train all models and return the best one
   public async trainAllModels(X: number[][], y: number[], scalingParams: any, encodingMaps: any): Promise<{ results: ModelResult[], bestModel: TrainedModel }> {
-    console.log('Training all models...');
-    
+    console.log('Training all models (sequential, saving each)...');
+
     const results: ModelResult[] = [];
-    
-    // Train all models
-    results.push(await this.trainLinearRegression(X, y));
-    results.push(await this.trainDecisionTree(X, y));
-    results.push(await this.trainRandomForest(X, y));
-    results.push(await this.trainGradientBoosting(X, y));
-    results.push(await this.trainXGBoost(X, y));
-    results.push(await this.trainDeepLearning(X, y));
+
+    // Train models one-by-one, save after each, and free memory before next
+    const trainedDirRoot = path.join(process.cwd(), 'trained_models');
+    await fs.promises.mkdir(trainedDirRoot, { recursive: true });
+
+    // Helper to save and cleanup per model
+    const saveAndCleanup = async (res: ModelResult) => {
+      try {
+        const safeName = res.name.replace(/[^a-z0-9_\-]/gi, '_');
+        const dir = path.join(trainedDirRoot, safeName);
+        await fs.promises.mkdir(dir, { recursive: true });
+
+        // Save tfjs models (they have model.save) using a save handler if file:// not available
+        if (res.model && typeof res.model.save === 'function') {
+          try {
+            // Prefer file:// if available in the environment
+            const fileUrl = `file://${dir}`;
+            await res.model.save(fileUrl);
+          } catch (err) {
+            // Fallback: use tf.io.withSaveHandler to obtain artifacts and write them
+            try {
+              const saveHandler = tf.io.withSaveHandler(async (artifacts) => {
+                // model.json content
+                const modelJson = {
+                  modelTopology: artifacts.modelTopology,
+                  weightsManifest: [{ paths: ['weights.bin'], weights: artifacts.weightSpecs }]
+                };
+                await fs.promises.writeFile(path.join(dir, 'model.json'), JSON.stringify(modelJson, null, 2));
+                // weights.bin
+                if (artifacts.weightData) {
+                  // artifacts.weightData can be ArrayBuffer or ArrayBufferView
+                  let buffer: Buffer;
+                  if (ArrayBuffer.isView(artifacts.weightData)) {
+                    // typed array view
+                    buffer = Buffer.from((artifacts.weightData as ArrayBufferView).buffer);
+                  } else {
+                    buffer = Buffer.from(new Uint8Array(artifacts.weightData as ArrayBuffer));
+                  }
+                  await fs.promises.writeFile(path.join(dir, 'weights.bin'), buffer);
+                }
+                const saveRes: tf.io.SaveResult = ({
+                  modelArtifactsInfo: {
+                    dateSaved: new Date(),
+                    modelTopologyType: 'JSON',
+                    weightDataBytes: artifacts.weightData ? (ArrayBuffer.isView(artifacts.weightData) ? (artifacts.weightData as ArrayBufferView).byteLength : (artifacts.weightData as ArrayBuffer).byteLength) : 0
+                  }
+                } as unknown) as tf.io.SaveResult;
+                return saveRes;
+              });
+
+              await res.model.save(saveHandler as any);
+            } catch (innerErr) {
+              console.warn(`Failed to save TF model ${res.name}:`, innerErr);
+            }
+          }
+
+          // Dispose tf model to free memory
+          try { res.model.dispose && res.model.dispose(); } catch (disposeErr) { /* ignore */ }
+        } else {
+          // Non-tf model: serialize trained data (may be custom object)
+          try {
+            const serializable = { model: res.model };
+            await fs.promises.writeFile(path.join(dir, 'model.json'), JSON.stringify(serializable, null, 2));
+          } catch (serErr) {
+            console.warn(`Failed to serialize model ${res.name}:`, serErr);
+          }
+          // Attempt to release large references
+          try {
+            if (res.model && typeof res.model === 'object' && 'trainedData' in res.model) {
+              // @ts-ignore
+              res.model.trainedData = undefined;
+            }
+          } catch (_) {}
+        }
+
+        // Save metrics/metadata
+        const meta = {
+          name: res.name,
+          r2Score: res.r2Score,
+          mse: res.mse,
+          mae: res.mae,
+          generatedAt: new Date().toISOString(),
+        };
+        await fs.promises.writeFile(path.join(dir, 'metadata.json'), JSON.stringify(meta, null, 2));
+      } catch (saveErr) {
+        console.warn('Error saving model to disk:', saveErr);
+      }
+    };
+
+    // Train and save models sequentially
+    const lrRes = await this.trainLinearRegression(X, y);
+    results.push(lrRes);
+    await saveAndCleanup(lrRes);
+
+    const dtRes = await this.trainDecisionTree(X, y);
+    results.push(dtRes);
+    await saveAndCleanup(dtRes);
+
+    const rfRes = await this.trainRandomForest(X, y);
+    results.push(rfRes);
+    await saveAndCleanup(rfRes);
+
+    const gbRes = await this.trainGradientBoosting(X, y);
+    results.push(gbRes);
+    await saveAndCleanup(gbRes);
+
+    const xgbRes = await this.trainXGBoost(X, y);
+    results.push(xgbRes);
+    await saveAndCleanup(xgbRes);
+
+    const dlRes = await this.trainDeepLearning(X, y);
+    results.push(dlRes);
+    await saveAndCleanup(dlRes);
     
     // Find best model based on R² score
     let bestResult = results[0];
