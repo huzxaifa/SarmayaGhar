@@ -1,5 +1,5 @@
 import { PropertyDataProcessor } from './dataProcessor';
-import { MLModelTrainer, type TrainedModel } from './models';
+import { MLModelTrainer, type TrainedModel, type ModelResult } from './models';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as tf from '@tensorflow/tfjs';
@@ -98,6 +98,132 @@ export class MLTrainingService {
             mse: r.mse,
             mae: r.mae
           }))
+        }
+      };
+
+    } catch (error) {
+      this.isTraining = false;
+      console.error('Training failed:', error);
+      return {
+        success: false,
+        message: `Training failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+
+  // Check which models are already trained locally
+  public getTrainedModels(): { name: string; trained: boolean; path?: string; accuracy?: number }[] {
+    const allModels = [
+      'Linear Regression',
+      'Decision Tree', 
+      'Random Forest',
+      'Gradient Boosting',
+      'XGBoost',
+      'Deep Learning'
+    ];
+
+    const result = allModels.map(modelName => {
+      const safeName = modelName.replace(/[^a-z0-9_\-]/gi, '_');
+      const modelDir = path.join(this.trainedModelsDir, safeName);
+      const metadataPath = path.join(modelDir, 'metadata.json');
+      
+      if (fs.existsSync(metadataPath)) {
+        try {
+          const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+          return {
+            name: modelName,
+            trained: true,
+            path: modelDir,
+            accuracy: metadata.r2Score || metadata.accuracy || 0
+          };
+        } catch (e) {
+          return {
+            name: modelName,
+            trained: false
+          };
+        }
+      }
+      
+      return {
+        name: modelName,
+        trained: false
+      };
+    });
+
+    return result;
+  }
+
+  // Get list of models that need to be trained
+  public getUntrainedModels(): string[] {
+    const trainedModels = this.getTrainedModels();
+    return trainedModels.filter(model => !model.trained).map(model => model.name);
+  }
+
+  // Train only specific models that are missing
+  public async trainMissingModels(): Promise<{ success: boolean; message: string; modelInfo?: any; trainedModels?: any[] }> {
+    if (this.isTraining) {
+      return { success: false, message: 'Training already in progress' };
+    }
+
+    const untrainedModels = this.getUntrainedModels();
+    
+    if (untrainedModels.length === 0) {
+      const trainedModels = this.getTrainedModels().filter(m => m.trained);
+      return { 
+        success: true, 
+        message: 'All models are already trained!',
+        trainedModels: trainedModels
+      };
+    }
+
+    this.isTraining = true;
+    console.log(`Training missing models: ${untrainedModels.join(', ')}`);
+
+    try {
+      // Load and preprocess data
+      const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated_1757269388792.csv');
+      
+      if (!fs.existsSync(csvPath)) {
+        throw new Error('Dataset file not found. Please upload the CSV file.');
+      }
+
+      const { features, targets } = await this.processor.loadAndPreprocessData(csvPath);
+      console.log(`Loaded ${features.length} property records for training`);
+
+      // Scale features
+      const { scaledFeatures, scalingParams } = this.processor.scaleFeatures(features);
+      const encodingMaps = this.processor.getEncodingMaps();
+
+      // Train only missing models
+      const trainer = new MLModelTrainer();
+      const { results, bestModel } = await trainer.trainSelectedModels(
+        scaledFeatures, 
+        targets, 
+        scalingParams, 
+        encodingMaps,
+        untrainedModels
+      );
+
+      this.trainedModel = bestModel;
+      this.isTraining = false;
+
+      console.log(`Training completed! Trained ${results.length} missing models. Best model: ${bestModel.name} with accuracy: ${bestModel.accuracy.toFixed(4)}`);
+
+      const allTrainedModels = this.getTrainedModels().filter(m => m.trained);
+
+      return {
+        success: true,
+        message: `Training completed successfully. Trained ${results.length} missing models: ${untrainedModels.join(', ')}`,
+        modelInfo: {
+          bestModel: bestModel.name,
+          accuracy: bestModel.accuracy,
+          newlyTrained: results.map((r: ModelResult) => ({
+            name: r.name,
+            accuracy: r.r2Score,
+            mse: r.mse,
+            mae: r.mae
+          })),
+          allTrained: allTrainedModels
         }
       };
 

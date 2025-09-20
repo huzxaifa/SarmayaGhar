@@ -338,6 +338,161 @@ export class MLModelTrainer {
     return { results, bestModel };
   }
 
+  // Train only selected models (for selective training)
+  public async trainSelectedModels(X: number[][], y: number[], scalingParams: any, encodingMaps: any, modelNames: string[]): Promise<{ results: ModelResult[], bestModel: TrainedModel }> {
+    console.log(`Training selected models: ${modelNames.join(', ')}`);
+
+    const results: ModelResult[] = [];
+
+    // Train models one-by-one, save after each, and free memory before next
+    const trainedDirRoot = path.join(process.cwd(), 'trained_models');
+    await fs.promises.mkdir(trainedDirRoot, { recursive: true });
+
+    // Helper to save and cleanup per model (reuse from trainAllModels)
+    const saveAndCleanup = async (res: ModelResult) => {
+      try {
+        const safeName = res.name.replace(/[^a-z0-9_\-]/gi, '_');
+        const dir = path.join(trainedDirRoot, safeName);
+        await fs.promises.mkdir(dir, { recursive: true });
+
+        // Save tfjs models (they have model.save) using a save handler if file:// not available
+        if (res.model && typeof res.model.save === 'function') {
+          try {
+            // Prefer file:// if available in the environment
+            const fileUrl = `file://${dir}`;
+            await res.model.save(fileUrl);
+          } catch (err) {
+            // Fallback: use tf.io.withSaveHandler to obtain artifacts and write them
+            try {
+              const saveHandler = tf.io.withSaveHandler(async (artifacts) => {
+                // model.json content
+                const modelJson = {
+                  modelTopology: artifacts.modelTopology,
+                  weightsManifest: [{ paths: ['weights.bin'], weights: artifacts.weightSpecs }]
+                };
+                await fs.promises.writeFile(path.join(dir, 'model.json'), JSON.stringify(modelJson, null, 2));
+                // weights.bin
+                if (artifacts.weightData) {
+                  // artifacts.weightData can be ArrayBuffer or ArrayBufferView
+                  let buffer: Buffer;
+                  if (ArrayBuffer.isView(artifacts.weightData)) {
+                    // typed array view
+                    buffer = Buffer.from((artifacts.weightData as ArrayBufferView).buffer);
+                  } else {
+                    buffer = Buffer.from(new Uint8Array(artifacts.weightData as ArrayBuffer));
+                  }
+                  await fs.promises.writeFile(path.join(dir, 'weights.bin'), buffer);
+                }
+                const saveRes: tf.io.SaveResult = ({
+                  modelArtifactsInfo: {
+                    dateSaved: new Date(),
+                    modelTopologyType: 'JSON',
+                    weightDataBytes: artifacts.weightData ? (ArrayBuffer.isView(artifacts.weightData) ? (artifacts.weightData as ArrayBufferView).byteLength : (artifacts.weightData as ArrayBuffer).byteLength) : 0
+                  }
+                } as unknown) as tf.io.SaveResult;
+                return saveRes;
+              });
+
+              await res.model.save(saveHandler as any);
+            } catch (innerErr) {
+              console.warn(`Failed to save TF model ${res.name}:`, innerErr);
+            }
+          }
+
+          // Dispose tf model to free memory
+          try { res.model.dispose && res.model.dispose(); } catch (disposeErr) { /* ignore */ }
+        } else {
+          // Non-tf model: serialize trained data (may be custom object)
+          try {
+            const serializable = { model: res.model };
+            await fs.promises.writeFile(path.join(dir, 'model.json'), JSON.stringify(serializable, null, 2));
+          } catch (serErr) {
+            console.warn(`Failed to serialize model ${res.name}:`, serErr);
+          }
+          // Attempt to release large references
+          try {
+            if (res.model && typeof res.model === 'object' && 'trainedData' in res.model) {
+              // @ts-ignore
+              res.model.trainedData = undefined;
+            }
+          } catch (_) {}
+        }
+
+        // Save metrics/metadata
+        const meta = {
+          name: res.name,
+          r2Score: res.r2Score,
+          mse: res.mse,
+          mae: res.mae,
+          scalingParams,
+          encodingMaps,
+          generatedAt: new Date().toISOString(),
+        };
+        await fs.promises.writeFile(path.join(dir, 'metadata.json'), JSON.stringify(meta, null, 2));
+      } catch (saveErr) {
+        console.warn('Error saving model to disk:', saveErr);
+      }
+    };
+
+    // Train only the requested models
+    for (const modelName of modelNames) {
+      let result: ModelResult | null = null;
+      
+      switch (modelName) {
+        case 'Linear Regression':
+          result = await this.trainLinearRegression(X, y);
+          break;
+        case 'Decision Tree':
+          result = await this.trainDecisionTree(X, y);
+          break;
+        case 'Random Forest':
+          result = await this.trainRandomForest(X, y);
+          break;
+        case 'Gradient Boosting':
+          result = await this.trainGradientBoosting(X, y);
+          break;
+        case 'XGBoost':
+          result = await this.trainXGBoost(X, y);
+          break;
+        case 'Deep Learning':
+          result = await this.trainDeepLearning(X, y);
+          break;
+        default:
+          console.warn(`Unknown model type: ${modelName}`);
+          continue;
+      }
+      
+      if (result) {
+        results.push(result);
+        await saveAndCleanup(result);
+      }
+    }
+    
+    // Find best model based on R² score (from newly trained models)
+    let bestResult = results[0];
+    results.forEach(result => {
+      if (result.r2Score > bestResult.r2Score) {
+        bestResult = result;
+      }
+    });
+    
+    console.log(`\nSelected Model Performance Results:`);
+    results.forEach(result => {
+      console.log(`${result.name}: R²=${result.r2Score.toFixed(4)}, MSE=${result.mse.toFixed(0)}, MAE=${result.mae.toFixed(0)}`);
+    });
+    console.log(`\nBest Model from selection: ${bestResult.name} with R² = ${bestResult.r2Score.toFixed(4)}`);
+    
+    const bestModel: TrainedModel = {
+      name: bestResult.name,
+      model: bestResult.model,
+      accuracy: bestResult.r2Score,
+      scalingParams,
+      encodingMaps
+    };
+    
+    return { results, bestModel };
+  }
+
   // Simple Decision Tree prediction
   private decisionTreePredict(X: number[][], y: number[]): number[] {
     // Simple implementation: split on feature mean and use mean of target values

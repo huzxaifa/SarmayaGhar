@@ -55,7 +55,17 @@ interface TrainingStatus {
   modelInfo?: {
     bestModel: string;
     accuracy: number;
+    newlyTrained?: Array<{
+      name: string;
+      accuracy: number;
+    }>;
   };
+  trainedModels?: Array<{
+    name: string;
+    trained: boolean;
+    accuracy?: number;
+  }>;
+  untrainedModels?: string[];
 }
 
 export default function MLValuationForm() {
@@ -76,11 +86,24 @@ export default function MLValuationForm() {
   useEffect(() => {
     const checkTrainingStatus = async () => {
       try {
-        const response = await apiRequest('GET', '/api/ml/training-status');
-        const status = await response.json();
-        setTrainingStatus(status);
+        // Get model status first
+        const modelStatusResponse = await apiRequest('GET', '/api/ml/model-status');
+        const modelStatus = await modelStatusResponse.json();
+        
+        // Get training status
+        const trainingResponse = await apiRequest('GET', '/api/ml/training-status');
+        const trainingStatusResponse = await trainingResponse.json();
+        
+        setTrainingStatus({
+          isTraining: false,
+          hasModel: modelStatus.hasAllModels,
+          modelInfo: trainingStatusResponse.modelInfo,
+          trainedModels: modelStatus.trainedModels,
+          untrainedModels: modelStatus.untrainedModels
+        });
       } catch (error) {
         console.error('Error checking training status:', error);
+        setTrainingStatus({ isTraining: false, hasModel: false });
       } finally {
         setIsCheckingStatus(false);
       }
@@ -95,7 +118,17 @@ export default function MLValuationForm() {
       const result = await response.json();
       
       if (result.success) {
-        setTrainingStatus({ isTraining: false, hasModel: true, modelInfo: result.modelInfo });
+        // Re-fetch model status after training
+        const modelStatusResponse = await apiRequest('GET', '/api/ml/model-status');
+        const modelStatus = await modelStatusResponse.json();
+        
+        setTrainingStatus({
+          isTraining: false,
+          hasModel: modelStatus.hasAllModels,
+          modelInfo: result.modelInfo,
+          trainedModels: modelStatus.trainedModels,
+          untrainedModels: modelStatus.untrainedModels
+        });
       } else {
         console.error('Training failed:', result.message);
         setTrainingStatus(prev => ({ ...prev, isTraining: false }));
@@ -339,6 +372,16 @@ export default function MLValuationForm() {
                         <p className="text-sm text-yellow-700 mt-1">
                           Train machine learning models on 168K+ real estate records to get accurate predictions
                         </p>
+                        {trainingStatus.untrainedModels && trainingStatus.untrainedModels.length > 0 && (
+                          <div className="text-sm text-yellow-700 mt-2">
+                            <p className="font-medium">Missing models:</p>
+                            <ul className="list-disc list-inside mt-1">
+                              {trainingStatus.untrainedModels.map((model) => (
+                                <li key={model}>{model}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                       <Button 
                         onClick={startTraining}
@@ -362,7 +405,10 @@ export default function MLValuationForm() {
                     </div>
                     {trainingStatus.isTraining && (
                       <div className="text-sm text-yellow-700">
-                        Training multiple ML models (Decision Tree, Random Forest, XGBoost, Deep Learning)...
+                        {trainingStatus.untrainedModels && trainingStatus.untrainedModels.length > 0 
+                          ? `Training missing models: ${trainingStatus.untrainedModels.join(', ')}...`
+                          : 'Training multiple ML models (Decision Tree, Random Forest, XGBoost, Deep Learning)...'
+                        }
                       </div>
                     )}
                   </div>

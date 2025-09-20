@@ -63,11 +63,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ML Training and Model Management routes
   app.post("/api/ml/train-models", async (req, res) => {
     try {
-      const result = await mlService.trainModels();
+      // Use the new selective training method
+      const result = await mlService.trainMissingModels();
       res.json(result);
     } catch (error) {
       console.error("Error training models:", error);
       res.status(500).json({ message: "Failed to start model training" });
+    }
+  });
+
+  // Get list of trained/untrained models
+  app.get("/api/ml/model-status", async (req, res) => {
+    try {
+      const trainedModels = mlService.getTrainedModels();
+      const untrainedModels = mlService.getUntrainedModels();
+      res.json({
+        trainedModels,
+        untrainedModels,
+        hasAllModels: untrainedModels.length === 0
+      });
+    } catch (error) {
+      console.error("Error getting model status:", error);
+      res.status(500).json({ message: "Failed to get model status" });
     }
   });
 
