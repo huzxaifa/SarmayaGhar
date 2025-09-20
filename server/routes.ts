@@ -126,7 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store valuation in database
       const valuationData = {
         city: request.city || "Karachi",
-        area: request.neighbourhood,
+        area: request.neighbourhood || request.location || "",
         propertyType: request.propertyType,
         bedrooms: request.bedrooms,
         bathrooms: request.bathrooms,

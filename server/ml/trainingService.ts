@@ -8,7 +8,7 @@ export interface PropertyValuationRequest {
   yearBuilt: number;
   location: string;
   propertyType: string;
-  neighbourhood: string;
+  neighbourhood?: string; // Made optional to match frontend
   areaMarla: number;
   bedrooms: number;
   bathrooms: number;
