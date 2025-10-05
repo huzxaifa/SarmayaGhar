@@ -7,6 +7,10 @@ server/public
 vite.config.ts.*
 .local/
 *.tar.gz
+trained_models/Gradient_Boosting
+trained_models/Random_Forest
+trained_models/Decision_Tree
+trained_models/XGBoost
 Scrape_Property_Details/
 FYP1-MidReport-S25-044-D-SarmayaGhar.pdf
 FYP1-Poster-S25-044-D-SarmayaGhar.pdf
