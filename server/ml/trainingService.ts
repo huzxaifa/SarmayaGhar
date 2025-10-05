@@ -8,7 +8,7 @@ export interface PropertyValuationRequest {
   yearBuilt: number;
   location: string;
   propertyType: string;
-  neighbourhood?: string; // Made optional to match frontend
+  neighbourhood?: string;
   areaMarla: number;
   bedrooms: number;
   bathrooms: number;
@@ -51,6 +51,46 @@ export class MLTrainingService {
     this.loadSavedModelIfExists().catch(err => {
       console.warn('Failed to load saved model at startup:', err);
     });
+  }
+
+  // Helper to detect Git LFS pointer files (they start with a 'version' line)
+  private isGitLfsPointer(filePath: string): boolean {
+    try {
+      if (!fs.existsSync(filePath)) return false;
+      const fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.alloc(64);
+      const bytes = fs.readSync(fd, buf, 0, 64, 0);
+      fs.closeSync(fd);
+      const head = buf.slice(0, bytes).toString('utf8').trim();
+      return head.startsWith('version https://git-lfs.github.com/spec/v1');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Try to enable the native TF Node backend if available. This registers
+  // filesystem IO handlers and allows tf.loadLayersModel('file://...') to work.
+  private async tryEnableTfNodeBackend(): Promise<boolean> {
+    try {
+      // Try the CPU backend first. Use a variable module name so TypeScript
+      // doesn't statically try to resolve the optional dependency.
+      const cpuModule = '@tensorflow/tfjs-node';
+      await import(cpuModule);
+      console.log('Using @tensorflow/tfjs-node backend for TensorFlow.js (native filesystem IO enabled).');
+      return true;
+    } catch (e) {
+      try {
+        const gpuModule = '@tensorflow/tfjs-node-gpu';
+        // Try GPU variant if available
+        await import(gpuModule);
+        console.log('Using @tensorflow/tfjs-node-gpu backend for TensorFlow.js (native filesystem IO enabled).');
+        return true;
+      } catch (inner) {
+        // Neither native backend available
+        console.log('Native tfjs-node backend not installed; file:// model loading may fall back to manual loader. For best performance and file:// support install @tensorflow/tfjs-node.');
+        return false;
+      }
+    }
   }
 
   // Train models and select the best one
@@ -121,15 +161,20 @@ export class MLTrainingService {
       'XGBoost',
       'Deep Learning'
     ];
-
     const result = allModels.map(modelName => {
       const safeName = modelName.replace(/[^a-z0-9_\-]/gi, '_');
       const modelDir = path.join(this.trainedModelsDir, safeName);
       const metadataPath = path.join(modelDir, 'metadata.json');
-      
+      const modelJsonPath = path.join(modelDir, 'model.json');
+      const weightsPath = path.join(modelDir, 'weights.bin');
+
+      // If metadata exists try to parse it; if parse fails (for example
+      // when Git LFS pointer is present) fall back to checking for model
+      // artifacts on disk (model.json / weights.bin).
       if (fs.existsSync(metadataPath)) {
         try {
-          const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+          const metadataRaw = fs.readFileSync(metadataPath, 'utf8');
+          const metadata = JSON.parse(metadataRaw);
           return {
             name: modelName,
             trained: true,
@@ -137,13 +182,65 @@ export class MLTrainingService {
             accuracy: metadata.r2Score || metadata.accuracy || 0
           };
         } catch (e) {
+          // fall through to artifact checks below
+        }
+      }
+
+      // If model artifacts exist, consider the model trained even if
+      // metadata.json couldn't be parsed (common when using Git LFS)
+      if (fs.existsSync(modelJsonPath) || fs.existsSync(weightsPath) || fs.existsSync(modelDir)) {
+        // modelDir existence alone might be from a leftover folder; ensure
+        // it contains meaningful artifacts where possible (not Git LFS pointers)
+        let hasArtifacts = false;
+
+        if (fs.existsSync(modelJsonPath) && !this.isGitLfsPointer(modelJsonPath)) {
+          hasArtifacts = true;
+        }
+
+        if (!hasArtifacts && fs.existsSync(weightsPath) && !this.isGitLfsPointer(weightsPath)) {
+          try {
+            const stat = fs.statSync(weightsPath);
+            // consider weights present if size > 1KB
+            if (stat.size > 1024) hasArtifacts = true;
+          } catch (_) {}
+        }
+
+        if (!hasArtifacts) {
+          // check for any non-pointer files in dir
+          try {
+            const files = fs.readdirSync(modelDir);
+            for (const f of files) {
+              const p = path.join(modelDir, f);
+              if (fs.statSync(p).isFile() && !this.isGitLfsPointer(p)) {
+                hasArtifacts = true;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (hasArtifacts) {
+          // Try to read accuracy from metadata if present, otherwise leave undefined
+          let accuracy: number | undefined = undefined;
+          try {
+            if (fs.existsSync(metadataPath)) {
+              const raw = fs.readFileSync(metadataPath, 'utf8');
+              const parsed = JSON.parse(raw);
+              accuracy = parsed.r2Score || parsed.accuracy || undefined;
+            }
+          } catch (_) {
+            // ignore parse errors
+          }
+
           return {
             name: modelName,
-            trained: false
+            trained: true,
+            path: modelDir,
+            accuracy
           };
         }
       }
-      
+
       return {
         name: modelName,
         trained: false
@@ -243,6 +340,35 @@ export class MLTrainingService {
       throw new Error('No trained model available. Please train the model first.');
     }
 
+    // Ensure encoding maps and scaling params are available even when loading
+    // a pre-trained model from disk that lacks serialized metadata.
+    if (!this.trainedModel.encodingMaps || !this.trainedModel.scalingParams) {
+      try {
+        // Load dataset and rebuild processor state
+        const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated_1757269388792.csv');
+        if (!fs.existsSync(csvPath)) {
+          throw new Error('Dataset file not found for rebuilding encodings/scaling.');
+        }
+
+        const { features } = await this.processor.loadAndPreprocessData(csvPath);
+        const { scaledFeatures, scalingParams } = this.processor.scaleFeatures(features as any);
+        // Persist encoding maps and scaling params onto trained model
+        const encodingMaps = this.processor.getEncodingMaps();
+        this.trainedModel.scalingParams = scalingParams;
+        this.trainedModel.encodingMaps = encodingMaps as any;
+        // Touch scaledFeatures to avoid unused var warning
+        void scaledFeatures;
+      } catch (rebuildErr) {
+        console.warn('Failed to rebuild encoding maps/scaling params:', rebuildErr);
+        throw new Error('Model metadata incomplete. Please (re)train models to enable predictions.');
+      }
+    }
+
+    // Normalize encoding maps to Map instances if they were deserialized as plain objects
+    if (this.trainedModel.encodingMaps) {
+      this.trainedModel.encodingMaps = this.normalizeEncodingMaps(this.trainedModel.encodingMaps);
+    }
+
     // Convert request to features
     const features = this.convertRequestToFeatures(request);
     
@@ -288,6 +414,28 @@ export class MLTrainingService {
       predictions,
       comparableProperties,
       insights
+    };
+  }
+
+  // Ensure each encoding map is a real Map with .get available
+  private normalizeEncodingMaps(encodingMaps: any): any {
+    const toMap = (maybe: any): Map<string, number> => {
+      if (maybe instanceof Map) return maybe;
+      if (maybe && typeof maybe === 'object') {
+        return new Map<string, number>(Object.entries(maybe) as [string, number][]);
+      }
+      return new Map();
+    };
+
+    return {
+      locationMap: toMap(encodingMaps.locationMap),
+      propertyTypeMap: toMap(encodingMaps.propertyTypeMap),
+      cityMap: toMap(encodingMaps.cityMap),
+      provinceMap: toMap(encodingMaps.provinceMap),
+      purposeMap: toMap(encodingMaps.purposeMap),
+      areaCategoryMap: toMap(encodingMaps.areaCategoryMap),
+      locationPremiumMap: toMap(encodingMaps.locationPremiumMap),
+      cityMeanPrices: toMap(encodingMaps.cityMeanPrices),
     };
   }
 
@@ -481,14 +629,46 @@ export class MLTrainingService {
 
       for (const d of subdirs) {
         if (!d.isDirectory()) continue;
-        const metaPath = path.join(this.trainedModelsDir, d.name, 'metadata.json');
-        if (!fs.existsSync(metaPath)) continue;
-        try {
-          const metaRaw = await fs.promises.readFile(metaPath, 'utf8');
-          const meta = JSON.parse(metaRaw);
-          candidates.push({ dir: path.join(this.trainedModelsDir, d.name), meta });
-        } catch (e) {
-          // ignore malformed metadata
+        const dirPath = path.join(this.trainedModelsDir, d.name);
+        const metaPath = path.join(dirPath, 'metadata.json');
+        const modelJsonPath = path.join(dirPath, 'model.json');
+        const weightsPath = path.join(dirPath, 'weights.bin');
+
+        // Try to read metadata if available and not a Git LFS pointer
+        let meta: any = null;
+        if (fs.existsSync(metaPath) && !this.isGitLfsPointer(metaPath)) {
+          try {
+            const metaRaw = await fs.promises.readFile(metaPath, 'utf8');
+            meta = JSON.parse(metaRaw);
+          } catch (e) {
+            // metadata exists but couldn't be parsed
+            meta = null;
+          }
+        }
+
+        // Consider candidate if we have parsed metadata or if model artifacts exist (and are not pointers)
+        let hasArtifacts = false;
+        if (fs.existsSync(modelJsonPath) && !this.isGitLfsPointer(modelJsonPath)) hasArtifacts = true;
+        if (!hasArtifacts && fs.existsSync(weightsPath) && !this.isGitLfsPointer(weightsPath)) {
+          try { if (fs.statSync(weightsPath).size > 1024) hasArtifacts = true; } catch (_) {}
+        }
+        if (!hasArtifacts) {
+          try {
+            const files = await fs.promises.readdir(dirPath);
+            for (const f of files) {
+              const p = path.join(dirPath, f);
+              try {
+                if (fs.statSync(p).isFile() && !this.isGitLfsPointer(p)) {
+                  hasArtifacts = true;
+                  break;
+                }
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+
+        if (meta || hasArtifacts) {
+          candidates.push({ dir: dirPath, meta: meta || {} });
         }
       }
 
@@ -503,17 +683,102 @@ export class MLTrainingService {
       if (fs.existsSync(modelJsonPath)) {
         try {
           const modelUrl = `file://${modelJsonPath}`;
-          // tf.loadLayersModel expects URL pointing to model.json
-          const loaded = await tf.loadLayersModel(modelUrl);
-          this.trainedModel = {
-            name: best.meta.name || path.basename(best.dir),
-            model: loaded,
-            accuracy: best.meta.r2Score || best.meta.accuracy || 0,
-            scalingParams: best.meta.scalingParams || null,
-            encodingMaps: best.meta.encodingMaps || null
-          } as TrainedModel;
-          console.log(`Loaded TF model from ${best.dir}`);
-          return true;
+          // tf.loadLayersModel expects URL pointing to model.json. In Node
+          // environments without the `@tensorflow/tfjs-node` filesystem IO
+          // handler, tfjs may attempt to use fetch which doesn't support
+          // file:// URLs and will fail with a 'fetch failed' / 'not implemented' error.
+          // First try the standard loader; if it fails due to fetch/file://,
+          // fall back to a manual loader that reads model.json and weights.bin
+          // from disk and constructs an IOHandler for tf.loadLayersModel.
+          try {
+            // Try to enable native tfjs-node backend which provides proper
+            // file:// filesystem handlers. If the native backend is not
+            // available, don't attempt file:// since it will likely fail
+            // due to Node fetch limitations; jump straight to manual loader.
+            const enabled = await this.tryEnableTfNodeBackend();
+            if (enabled) {
+              const loaded = await tf.loadLayersModel(modelUrl);
+              this.trainedModel = {
+                name: best.meta.name || path.basename(best.dir),
+                model: loaded,
+                accuracy: best.meta.r2Score || best.meta.accuracy || 0,
+                scalingParams: best.meta.scalingParams || null,
+                encodingMaps: best.meta.encodingMaps || null
+              } as TrainedModel;
+              console.log(`Loaded TF model from ${best.dir} (via file://)`);
+              return true;
+            } else {
+              console.warn('Skipping tf.loadLayersModel(file://) because native tfjs-node backend is not available; attempting manual loader');
+            }
+          } catch (innerErr) {
+            // If error is related to fetch/file protocol, attempt manual load
+            console.warn('tf.loadLayersModel(file://) failed or was skipped, attempting manual load:', innerErr && (innerErr as Error).message);
+
+            try {
+              const raw = await fs.promises.readFile(modelJsonPath, 'utf8');
+              const modelJson = JSON.parse(raw);
+
+              // weights manifest usually references weights.bin
+              // try to read weights.bin (first path in manifest)
+              let weightDataBuffer: Buffer | null = null;
+              if (Array.isArray(modelJson.weightsManifest) && modelJson.weightsManifest.length > 0) {
+                const firstEntry = modelJson.weightsManifest[0];
+                const firstPath = Array.isArray(firstEntry.paths) && firstEntry.paths.length > 0 ? firstEntry.paths[0] : null;
+                if (firstPath) {
+                  const weightsPath = path.join(best.dir, firstPath);
+                  if (fs.existsSync(weightsPath)) {
+                    weightDataBuffer = await fs.promises.readFile(weightsPath);
+                  }
+                }
+              }
+
+              // If no separate weights path found, also try weights.bin at root
+              if (!weightDataBuffer) {
+                const altWeights = path.join(best.dir, 'weights.bin');
+                if (fs.existsSync(altWeights)) {
+                  weightDataBuffer = await fs.promises.readFile(altWeights);
+                }
+              }
+
+              const weightSpecs = Array.isArray(modelJson.weightsManifest)
+                ? modelJson.weightsManifest.flatMap((m: any) => m.weights || [])
+                : [];
+
+              if (!modelJson.modelTopology) {
+                throw new Error('model.json does not contain modelTopology');
+              }
+
+              // Construct a custom IOHandler for loading from memory
+              const ioHandler: tf.io.IOHandler = {
+                load: async () => {
+                  const weightDataArrayBuffer = weightDataBuffer
+                    ? weightDataBuffer.buffer.slice(weightDataBuffer.byteOffset, weightDataBuffer.byteOffset + weightDataBuffer.byteLength)
+                    : new ArrayBuffer(0);
+
+                  const artifacts: tf.io.ModelArtifacts = {
+                    modelTopology: modelJson.modelTopology,
+                    weightSpecs: weightSpecs,
+                    weightData: weightDataArrayBuffer
+                  } as any;
+
+                  return artifacts;
+                }
+              };
+
+              const loadedManual = await tf.loadLayersModel(ioHandler);
+              this.trainedModel = {
+                name: best.meta.name || path.basename(best.dir),
+                model: loadedManual,
+                accuracy: best.meta.r2Score || best.meta.accuracy || 0,
+                scalingParams: best.meta.scalingParams || null,
+                encodingMaps: best.meta.encodingMaps || null
+              } as TrainedModel;
+              console.log(`Loaded TF model from ${best.dir} (manual)`);
+              return true;
+            } catch (manualErr) {
+              console.warn('Manual TF model load failed:', manualErr);
+            }
+          }
         } catch (err) {
           console.warn('Failed to load TF model from disk:', err);
         }

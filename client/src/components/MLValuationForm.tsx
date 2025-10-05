@@ -94,9 +94,10 @@ export default function MLValuationForm() {
         const trainingResponse = await apiRequest('GET', '/api/ml/training-status');
         const trainingStatusResponse = await trainingResponse.json();
         
+        // Consider models ready only if the server reports an in-memory trained model
         setTrainingStatus({
           isTraining: false,
-          hasModel: modelStatus.hasAllModels,
+          hasModel: !!trainingStatusResponse?.hasModel,
           modelInfo: trainingStatusResponse.modelInfo,
           trainedModels: modelStatus.trainedModels,
           untrainedModels: modelStatus.untrainedModels
@@ -124,7 +125,7 @@ export default function MLValuationForm() {
         
         setTrainingStatus({
           isTraining: false,
-          hasModel: modelStatus.hasAllModels,
+          hasModel: true,
           modelInfo: result.modelInfo,
           trainedModels: modelStatus.trainedModels,
           untrainedModels: modelStatus.untrainedModels
@@ -213,7 +214,12 @@ export default function MLValuationForm() {
                       <FormItem>
                         <FormLabel>Location/Area *</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. DHA Defence" {...field} data-testid="input-location" />
+                          <Input 
+                            placeholder="e.g. DHA Defence" 
+                            {...field} 
+                            data-testid="input-location"
+                            className="placeholder:text-muted-foreground/70"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -254,7 +260,12 @@ export default function MLValuationForm() {
                       <FormItem>
                         <FormLabel>Neighbourhood *</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Phase 6, Block A" {...field} data-testid="input-neighbourhood" />
+                          <Input 
+                            placeholder="e.g. Phase 6, Block A" 
+                            {...field} 
+                            data-testid="input-neighbourhood"
+                            className="placeholder:text-muted-foreground/70"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -277,6 +288,7 @@ export default function MLValuationForm() {
                             max="2025" 
                             {...field} 
                             data-testid="input-year-built"
+                            className="placeholder:text-muted-foreground/70"
                           />
                         </FormControl>
                         <FormMessage />
@@ -297,6 +309,7 @@ export default function MLValuationForm() {
                             step="0.1" 
                             {...field} 
                             data-testid="input-area-marla"
+                            className="placeholder:text-muted-foreground/70"
                           />
                         </FormControl>
                         <FormMessage />

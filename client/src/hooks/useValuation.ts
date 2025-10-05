@@ -5,7 +5,8 @@ import type { ValuationInput, ValuationResult } from "@/lib/types";
 export function useValuation() {
   return useMutation<ValuationResult, Error, ValuationInput>({
     mutationFn: async (input: ValuationInput) => {
-      const response = await apiRequest('POST', '/api/ml/property-valuation', input);
+      // Use legacy valuation endpoint that matches ValuationInput/ValuationResult types
+      const response = await apiRequest('POST', '/api/ml/property-valuation-legacy', input);
       return response.json();
     },
   });

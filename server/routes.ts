@@ -151,8 +151,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(result);
     } catch (error) {
-      console.error("Error calculating ML valuation:", error);
-      res.status(500).json({ message: "Failed to calculate property valuation" });
+      const err = error as any;
+      console.error("Error calculating ML valuation:", err && (err.stack || err.message || err));
+      res.status(500).json({ 
+        message: "Failed to calculate property valuation",
+        detail: err && (err.message || String(err))
+      });
     }
   });
 
