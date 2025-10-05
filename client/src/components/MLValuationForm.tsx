@@ -77,7 +77,6 @@ export default function MLValuationForm() {
   const form = useForm<MLValuationFormData>({
     resolver: zodResolver(mlValuationSchema),
     defaultValues: {
-      city: "Karachi",
       province: "Sindh",
     },
   });
@@ -258,7 +257,7 @@ export default function MLValuationForm() {
                     name="neighbourhood"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Neighbourhood *</FormLabel>
+                        <FormLabel>Neighbourhood</FormLabel>
                         <FormControl>
                           <Input 
                             placeholder="e.g. Phase 6, Block A" 
