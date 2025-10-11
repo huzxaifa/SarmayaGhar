@@ -1,27 +1,22 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    "lib": ["ES2022"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "outDir": "./dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./client/src/*"],
-      "@shared/*": ["./shared/*"],
-      "@assets/*": ["./attached_assets/*"]
+      "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["client/src"],
-  "references": [{ "path": "./tsconfig.server.json" }]
+  "include": ["server", "shared"]
 }
