@@ -1,0 +1,71 @@
+1. Necessary User Inputs
+
+For your AI-powered valuation web app, the goal is:
+  ->  The user provides a few high-impact inputs → system maps them to dataset features → ML model predicts property value and related insights.
+
+Here are the necessary and most influential inputs :
+Location, Property Type, Area, Bedrooms, Bathrooms, Purpose, Year Built (optional), Key Features (checkbox list)
+From these, your backend extracts, transforms, and maps to dataset features for prediction.
+
+2. Data Preprocessing & Transformation Pipeline
+
+Let’s break down exactly what happens between user input → model prediction.
+
+Step-by-Step Data Flow
+
+Step 1: Input Parsing & Validation
+User fills in the form (location, area, etc.).
+Backend validates: e.g., area > 0, built in year .
+Converts units if needed (e.g., 10 marla → 2250 sq ft).
+
+Step 2: Feature Mapping & Enrichment
+
+The system looks up historical data for the same or nearby locations.
+It fetches average price per marla, market trend indicators, and comparable property features (comps).
+
+Example:
+“10 Marla House in LDA Avenue, Lahore” → mean price/marla = PKR 32.5 lakh.
+This ensures the model has contextual (spatial + temporal) data.
+
+Step 3: Data Cleaning
+
+Before training or predicting:
+Handle missing values (NaN for features like community or amenities).
+→ Replace with defaults or neighborhood averages.
+Remove duplicates and invalid records.
+Standardize categorical labels (e.g., “House” vs “house”).
+
+Step 4: Feature Engineering
+
+Here’s where the magic happens — converting raw fields into machine-readable features.
+| Raw Field    |    Engineered Feature  |    Description  |
+| `Price`     | `price_per_marla` = Price / Area  | Normalized metric   |
+| `Location`  | Lat/Long embedding / one-hot encoding | Spatial representation  |
+| `Date Added`   | `Property Age` / `Season Index` | Temporal influence  |
+| `Features`     | Count or binary vector | e.g., has_garage = 1  |
+| `Market Trend` | Rising / Falling / Stable   | Derived via time-series analysis |
+Step 5: Feature Selection & Normalization
+
+Select only the model’s input features (e.g., top 20 by correlation or feature importance).
+
+Normalize values (MinMaxScaler or StandardScaler) to avoid bias from large numeric ranges.
+
+Step 6: Model Inference (Prediction)
+
+Feed transformed vector → trained ML models:
+
+Linear Regression: for interpretability
+
+Random Forest / XGBoost: for robustness
+
+Deep Neural Networks: for non-linear feature learning
+
+Model Outputs:
+Predicted Price = 3.25 Crore
+Confidence = 87%
+Market Trend = Rising
+Price/Marla = PKR 32.5 Lakh
+Projected Value after 1 year = 3.45 Crore
+
+Step 7: Post-Processing & Result Display
+Results are formatted for UI display.
