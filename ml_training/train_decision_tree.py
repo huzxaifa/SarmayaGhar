@@ -28,6 +28,9 @@ print(f"   Loaded {len(data)} records")
 data = data[data['purpose'] == 'For Sale'].copy()
 print(f"   Filtered to {len(data)} 'For Sale' properties")
 
+# Rename columns for easier access
+data = data.rename(columns={'Area Size': 'area_size', 'Area Type': 'area_type', 'Area Category': 'area_category'})
+
 # Remove rows with missing critical values
 data = data.dropna(subset=['price', 'location', 'property_type', 'city', 'area_size'])
 print(f"   After removing missing values: {len(data)} records")
@@ -58,13 +61,17 @@ for col in categorical_cols:
 
 data['baths'] = pd.to_numeric(data['baths'], errors='coerce').fillna(1)
 data['bedrooms'] = pd.to_numeric(data['bedrooms'], errors='coerce').fillna(2)
+
+data['area_size'] = pd.to_numeric(data['area_size'], errors='coerce')
+data['area_size'] = data['area_size'].replace(0, np.nan).fillna(data['area_size'].median())
 data['price_per_unit'] = data['price'] / data['area_size']
 
 data['date_added'] = pd.to_datetime(data['date_added'], errors='coerce')
 data['property_age_years'] = 2025 - data['date_added'].dt.year
 data['property_age_years'] = data['property_age_years'].fillna(5)
 
-data['bath_bedroom_ratio'] = data['baths'] / data['bedrooms'].replace(0, 1)
+data['bedrooms'] = data['bedrooms'].replace(0, 1)
+data['bath_bedroom_ratio'] = data['baths'] / data['bedrooms']
 
 feature_columns = [
     'location_encoded', 'property_type_encoded', 'city_encoded',
