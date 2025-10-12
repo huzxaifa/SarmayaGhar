@@ -45,7 +45,69 @@ The application includes session management infrastructure:
 - **Drizzle ORM**: Type-safe database toolkit for PostgreSQL operations
 
 ## AI & Machine Learning
+
+### Core ML System
+The application features a comprehensive machine learning training pipeline for property valuation:
+
+**ML Models Implemented:**
+- Linear Regression (TensorFlow.js)
+- Decision Tree Regressor (custom implementation)
+- Random Forest Regressor (ensemble method)
+- Gradient Boosting Regressor (boosting algorithm)
+- XGBoost Regressor (advanced boosting with regularization)
+- Deep Learning (4-layer feedforward neural network)
+
+**Training Pipeline (`server/ml/`):**
+- `dataProcessor.ts`: Data loading, cleaning, feature engineering, and scaling
+- `models.ts`: All 6 ML model implementations with training & evaluation
+- `trainingService.ts`: Training orchestration, model management, and prediction
+
+**Dataset:**
+- Source: `attached_assets/zameen-updated_1757269388792.csv` (48MB, 168K+ records)
+- Features: 16 engineered features including location encoding, price per unit, property age, etc.
+- Preprocessing: Outlier removal, feature scaling (z-score normalization), label encoding
+
+**Model Evaluation Metrics:**
+- R² Score (Coefficient of determination)
+- Mean Absolute Error (MAE)
+- Mean Squared Error (MSE)
+
+**Model Storage:**
+- Format: TensorFlow.js (model.json + weights.bin for DL models)
+- Location: `trained_models/<model_name>/`
+- Metadata: Each model includes metadata.json with performance metrics and hyperparameters
+
+**Training API:**
+- `POST /api/ml/train-models` - Train all missing models
+- `GET /api/ml/model-status` - Check which models are trained
+- `GET /api/ml/training-status` - Real-time training status
+- `POST /api/ml/property-valuation` - Get AI-powered property valuations
+
+**How to Train Models:**
+1. Navigate to the AI Valuation page in the UI
+2. Click the "Train Models" button (if models not trained)
+3. Or use API: `curl -X POST http://localhost:5000/api/ml/train-models`
+4. Training outputs performance comparison of all models
+5. System automatically selects best model based on R² score
+
+**Feature Engineering:**
+- Categorical encoding for property type, location, city, province
+- Location premium calculation from historical prices
+- Property age from date added
+- Bath-to-bedroom ratio
+- Normalized area size
+- Price per unit calculation
+
+**Prediction Flow:**
+1. User inputs property details
+2. System converts to engineered features
+3. Applies saved scaling parameters
+4. Makes prediction using best trained model
+5. Returns price, confidence score, range, insights, and market trends
+
+### Other AI Services
 - **OpenAI API**: GPT-5 integration for chatbot functionality and market analysis
+- **TensorFlow.js**: Browser/Node.js ML framework for model training and inference
 - **Chart.js**: Client-side data visualization for property analytics
 
 ## UI & Styling
