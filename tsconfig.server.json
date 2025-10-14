@@ -1,22 +1,3 @@
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "lib": ["ES2022"],
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "@shared/*": ["./shared/*"]
-    }
-  },
-  "include": ["server", "shared"]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:e1f01381fe5831bb628d393516d14a8c63d8e8b4c4c898b54077fc25e2f3504a
+size 517
