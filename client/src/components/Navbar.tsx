@@ -27,9 +27,11 @@ export default function Navbar() {
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">S</span>
-            </div>
+            <img
+              src="/sarmayaghar-logo.png"
+              alt="SarmayaGhar logo"
+              className="h-8 w-auto object-contain"
+            />
             <span className="ml-2 text-xl font-bold text-foreground">SarmayaGhar</span>
           </Link>
 
