@@ -8,7 +8,6 @@ import Layout from "@/components/Layout";
 import Home from "@/pages/home";
 import Properties from "@/pages/properties";
 import Valuation from "@/pages/valuation";
-import RentalAnalysis from "@/pages/rental-analysis";
 import ROIAnalysis from "@/pages/roi-analysis";
 import Portfolio from "@/pages/portfolio";
 import HeatMap from "@/pages/heatmap";
@@ -27,7 +26,6 @@ function Router() {
             <Route path="/" component={Home} />
             <Route path="/properties" component={Properties} />
             <Route path="/valuation" component={Valuation} />
-            <Route path="/rental-analysis" component={RentalAnalysis} />
             <Route path="/roi-analysis" component={ROIAnalysis} />
             <Route path="/portfolio" component={Portfolio} />
             <Route path="/heatmap" component={HeatMap} />
