@@ -1,5 +1,6 @@
 import { PropertyDataProcessor } from './dataProcessor';
 import { MLModelTrainer, type TrainedModel, type ModelResult } from './models';
+import { sklearnModelManager, type PredictionRequest, type PredictionResponse } from './sklearnModels';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as tf from '@tensorflow/tfjs';
@@ -47,10 +48,16 @@ export class MLTrainingService {
   private trainedModelsDir = path.join(process.cwd(), 'trained_models');
 
   constructor() {
-    // attempt to load saved model at startup
-    this.loadSavedModelIfExists().catch(err => {
-      console.warn('Failed to load saved model at startup:', err);
-    });
+    // Check if sklearn models are available first
+    if (sklearnModelManager.hasModels()) {
+      console.log('Sklearn models detected and loaded successfully');
+    } else {
+      console.log('No sklearn models found, falling back to TensorFlow models');
+      // attempt to load saved model at startup
+      this.loadSavedModelIfExists().catch(err => {
+        console.warn('Failed to load saved model at startup:', err);
+      });
+    }
   }
 
   // Helper to detect Git LFS pointer files (they start with a 'version' line)
@@ -153,6 +160,15 @@ export class MLTrainingService {
 
   // Check which models are already trained locally
   public getTrainedModels(): { name: string; trained: boolean; path?: string; accuracy?: number }[] {
+    // First check sklearn models
+    if (sklearnModelManager.hasModels()) {
+      const sklearnStatus = sklearnModelManager.getModelStatus();
+      return sklearnStatus.trainedModels.map(model => ({
+        name: model.name,
+        trained: model.trained,
+        accuracy: model.accuracy
+      }));
+    }
     const allModels = [
       'Linear Regression',
       'Decision Tree', 
@@ -336,6 +352,11 @@ export class MLTrainingService {
 
   // Predict property price
   public async predictPrice(request: PropertyValuationRequest): Promise<PropertyValuationResponse> {
+    // Use sklearn models if available
+    if (sklearnModelManager.hasModels()) {
+      return this.predictWithSklearn(request);
+    }
+    
     if (!this.trainedModel) {
       throw new Error('No trained model available. Please train the model first.');
     }
@@ -593,14 +614,72 @@ export class MLTrainingService {
     return insights;
   }
 
+  // Predict using sklearn models
+  private async predictWithSklearn(request: PropertyValuationRequest): Promise<PropertyValuationResponse> {
+    try {
+      const sklearnRequest: PredictionRequest = {
+        yearBuilt: request.yearBuilt,
+        location: request.location,
+        propertyType: request.propertyType,
+        neighbourhood: request.neighbourhood,
+        areaMarla: request.areaMarla,
+        bedrooms: request.bedrooms,
+        bathrooms: request.bathrooms,
+        city: request.city,
+        province: request.province
+      };
+
+      const sklearnResponse = await sklearnModelManager.predict(sklearnRequest);
+
+      // Calculate future predictions with market growth assumptions
+      const marketGrowthRate = this.getMarketGrowthRate(request.city || '', request.location);
+      const predictions = {
+        currentYear: sklearnResponse.predictedPrice,
+        oneYear: Math.round(sklearnResponse.predictedPrice * (1 + marketGrowthRate)),
+        twoYear: Math.round(sklearnResponse.predictedPrice * Math.pow(1 + marketGrowthRate, 2)),
+        threeYear: Math.round(sklearnResponse.predictedPrice * Math.pow(1 + marketGrowthRate, 3))
+      };
+
+      // Get comparable properties
+      const comparableProperties = this.getComparableProperties(request);
+
+      // Generate insights
+      const insights = this.generateInsights(request, sklearnResponse.predictedPrice);
+
+      // Determine market trend
+      const marketTrend = marketGrowthRate > 0.05 ? 'Rising' : marketGrowthRate < -0.02 ? 'Declining' : 'Stable';
+
+      return {
+        predictedPrice: sklearnResponse.predictedPrice,
+        priceRange: sklearnResponse.priceRange,
+        confidence: sklearnResponse.confidence,
+        marketTrend,
+        predictions,
+        comparableProperties,
+        insights
+      };
+    } catch (error) {
+      console.error('Sklearn prediction failed:', error);
+      throw new Error(`Sklearn prediction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   // Get training status
   public getTrainingStatus(): { isTraining: boolean; hasModel: boolean; modelInfo?: any } {
+    const hasSklearnModels = sklearnModelManager.hasModels();
+    const hasTfModels = !!this.trainedModel;
+    
     return {
       isTraining: this.isTraining,
-      hasModel: !!this.trainedModel,
-      modelInfo: this.trainedModel ? {
+      hasModel: hasSklearnModels || hasTfModels,
+      modelInfo: hasSklearnModels ? {
+        name: sklearnModelManager.getBestModel()?.name || 'Sklearn Models',
+        accuracy: sklearnModelManager.getBestModel()?.metadata.r2Score || 0,
+        type: 'sklearn'
+      } : this.trainedModel ? {
         name: this.trainedModel.name,
-        accuracy: this.trainedModel.accuracy
+        accuracy: this.trainedModel.accuracy,
+        type: 'tensorflow'
       } : undefined
     };
   }

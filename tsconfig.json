@@ -1,27 +1,3 @@
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./client/src/*"],
-      "@shared/*": ["./shared/*"],
-      "@assets/*": ["./attached_assets/*"]
-    }
-  },
-  "include": ["client/src"],
-  "references": [{ "path": "./tsconfig.server.json" }]
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:d59d4166cec9315091ae30318fc5c5822db6ed584cb48f42d70acd3ff6f5bdd0
+size 724
