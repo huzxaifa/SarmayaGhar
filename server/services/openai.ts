@@ -49,7 +49,13 @@ export async function getChatResponse(message: string, _context?: any): Promise<
 
 Always provide practical, actionable advice based on current Pakistani real estate market conditions. Use PKR currency and local units (marla, kanal). Be concise but informative.
 
-Context: Pakistani real estate market is recovering in 2025 with interest rates dropping from 22% to 12-13%. Property values are expected to rise 10-15% annually.`;
+Context: Pakistani real estate market is recovering in 2025 with interest rates dropping from 22% to 12-13%. Property values are expected to rise 10-15% annually.
+
+Please respond in JSON format with the following structure:
+{
+  "message": "your response here",
+  "suggestions": ["suggestion1", "suggestion2", "suggestion3", "suggestion4"]
+}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o", // Using gpt-4o as gpt-5 might not be available
