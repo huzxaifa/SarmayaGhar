@@ -77,10 +77,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const trainedModels = mlService.getTrainedModels();
       const untrainedModels = mlService.getUntrainedModels();
+      const status = mlService.getTrainingStatus();
+      
       res.json({
         trainedModels,
         untrainedModels,
-        hasAllModels: untrainedModels.length === 0
+        hasAllModels: untrainedModels.length === 0,
+        hasModel: status.hasModel,
+        modelInfo: status.modelInfo
       });
     } catch (error) {
       console.error("Error getting model status:", error);
