@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Home, Building, Calculator, Map, PieChart, MessageCircle, LogOut, User, DollarSign } from "lucide-react";
+import { Menu, X, Home, Building, Calculator, Map, PieChart, MessageCircle, LogOut, User, DollarSign, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -21,6 +21,7 @@ export default function Navbar() {
     { name: "Properties", href: "/properties", icon: Building },
     { name: "AI Valuation", href: "/valuation", icon: Calculator },
     { name: "Rental Analysis", href: "/rental-analysis", icon: DollarSign },
+    { name: "ROI Analysis", href: "/roi-analysis", icon: Target },
     { name: "Market Insights", href: "/heatmap", icon: Map },
     { name: "Portfolio", href: "/portfolio", icon: PieChart },
   ];

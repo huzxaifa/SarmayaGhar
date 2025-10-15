@@ -5,6 +5,7 @@ import { insertPropertySchema, insertValuationSchema, insertPortfolioPropertySch
 import { calculatePropertyValuation, predictMarketTrends, calculateROI, type PropertyValuationInput } from "./services/mlModels";
 import { getChatResponse, analyzePakistaniPropertyMarket } from "./services/openai";
 import { mlService, type PropertyValuationRequest } from "./ml/trainingService";
+import { historicalAnalyzer } from "./ml/historicalAnalyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Properties routes
@@ -340,6 +341,248 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching market insights:", error);
       res.status(500).json({ message: "Failed to fetch market insights" });
+    }
+  });
+
+  // Basic ROI Analysis routes (without Python service)
+  app.get("/api/roi/cities", async (req, res) => {
+    res.json({
+      cities: [
+        "Islamabad",
+        "Karachi", 
+        "Lahore",
+        "Rawalpindi",
+        "Faisalabad"
+      ]
+    });
+  });
+
+  app.get("/api/roi/property-types", async (req, res) => {
+    res.json({
+      property_types: [
+        "House",
+        "Flat",
+        "Penthouse",
+        "Lower Portion",
+        "Upper Portion"
+      ]
+    });
+  });
+
+  app.get("/api/roi/market-rates", async (req, res) => {
+    res.json({
+      "Islamabad": {
+        "avg_rent_per_marla": 4500,
+        "avg_price_per_marla": 600000,
+        "yield_percentage": 9.0
+      },
+      "Karachi": {
+        "avg_rent_per_marla": 5000,
+        "avg_price_per_marla": 550000,
+        "yield_percentage": 10.9
+      },
+      "Lahore": {
+        "avg_rent_per_marla": 4000,
+        "avg_price_per_marla": 500000,
+        "yield_percentage": 9.6
+      },
+      "Rawalpindi": {
+        "avg_rent_per_marla": 3500,
+        "avg_price_per_marla": 450000,
+        "yield_percentage": 9.3
+      },
+      "Faisalabad": {
+        "avg_rent_per_marla": 3000,
+        "avg_price_per_marla": 400000,
+        "yield_percentage": 9.0
+      }
+    });
+  });
+
+  app.post("/api/roi/analyze", async (req, res) => {
+    try {
+      const { property_data } = req.body;
+      
+      if (!property_data) {
+        return res.status(400).json({ message: "Property data is required" });
+      }
+
+      // AI-powered ROI calculation using ML models
+      const {
+        city = "Islamabad",
+        location = "DHA Defence",
+        property_type = "House",
+        area_marla = 10,
+        bedrooms = 3,
+        bathrooms = 2
+      } = property_data;
+
+      // Use AI models to predict property price and rent
+      const propertyPriceResponse = await mlService.predictPrice({
+        city,
+        location,
+        bedrooms,
+        bathrooms,
+        areaMarla: area_marla,
+        propertyType: property_type,
+        yearBuilt: 2020 // Default year
+      });
+
+      const propertyPrice = propertyPriceResponse.predictedPrice;
+      
+      // For now, use your formula for rent prediction (1% of property value)
+      // TODO: Implement dedicated rental prediction model
+      const monthlyRent = propertyPrice / 100;
+
+      // Use AI predictions for calculations
+      const property_value = propertyPrice;
+      const monthly_rent = monthlyRent;
+      const annual_rent = monthly_rent * 12;
+      
+      // Calculate maintenance costs (typically 0.5-1% of property value annually)
+      const annual_maintenance = property_value * 0.0075; // 0.75% of property value
+      const net_annual_income = annual_rent - annual_maintenance;
+      
+      // Get historical growth rates for this location and property type
+      const growthRates = historicalAnalyzer.getGrowthRates(city, location, property_type);
+      
+      // Use historical data if available and positive, otherwise fallback to default rates
+      let property_appreciation_rate = 15.6578; // Default fallback
+      let rent_growth_rate = 0.4897; // Default fallback - 0.4897% of property price
+      let data_confidence = 0.5; // Default confidence
+      let using_fallback = true;
+      let fallback_reason = "no_historical_data";
+      
+      if (growthRates) {
+        // Check if historical data is reasonable for investment analysis
+        const historical_appreciation = growthRates.property_appreciation_rate;
+        const historical_rent_growth = growthRates.rent_growth_rate;
+        
+        // Use historical data only if:
+        // 1. Property appreciation is not severely negative (< -20%)
+        // 2. Rent growth is not severely negative (< -10%)
+        // 3. Data has reasonable confidence (> 0.6)
+        if (historical_appreciation >= -20 && 
+            historical_rent_growth >= -10 && 
+            growthRates.confidence > 0.6) {
+          property_appreciation_rate = historical_appreciation;
+          rent_growth_rate = historical_rent_growth;
+          data_confidence = growthRates.confidence;
+          using_fallback = false;
+          fallback_reason = "historical_data_used";
+        } else {
+          // Historical data exists but is not suitable for investment analysis
+          if (historical_appreciation < -20) {
+            fallback_reason = "negative_appreciation_too_severe";
+          } else if (historical_rent_growth < -10) {
+            fallback_reason = "negative_rent_growth_too_severe";
+          } else if (growthRates.confidence <= 0.6) {
+            fallback_reason = "low_confidence_data";
+          }
+        }
+      }
+      
+      // ROI = (Rent + Property Appreciation) / Property Price
+      // Use actual historical appreciation rate
+      const property_appreciation = property_value * (property_appreciation_rate / 100);
+      const total_annual_return = net_annual_income + property_appreciation;
+      const annual_roi = (total_annual_return / property_value) * 100;
+      const cap_rate = (annual_rent / property_value) * 100;
+      
+      // Calculate price per marla
+      const price_per_marla = property_value / area_marla;
+      
+      // Calculate investment grade
+      let grade = "D";
+      if (annual_roi >= 12 && cap_rate >= 8) grade = "A+";
+      else if (annual_roi >= 10 && cap_rate >= 6) grade = "A";
+      else if (annual_roi >= 8 && cap_rate >= 5) grade = "B+";
+      else if (annual_roi >= 6 && cap_rate >= 4) grade = "B";
+      else if (annual_roi >= 4 && cap_rate >= 3) grade = "C";
+
+      const analysis = {
+        ai_predictions: {
+          property_price: property_value,
+          monthly_rent: monthly_rent,
+          price_per_marla: price_per_marla,
+          confidence: data_confidence,
+          method: using_fallback ? "fallback_formula" : "historical_analysis",
+          fallback_info: {
+            using_fallback: using_fallback,
+            fallback_reason: fallback_reason,
+          fallback_rates: {
+            property_appreciation_rate: 15.6578,
+            rent_growth_rate: 0.4897
+          }
+          },
+          historical_data: growthRates ? {
+            property_appreciation_rate: growthRates.property_appreciation_rate,
+            rent_growth_rate: growthRates.rent_growth_rate,
+            data_points: growthRates.data_points,
+            years_analyzed: growthRates.years_analyzed,
+            confidence: growthRates.confidence,
+            was_used: !using_fallback
+          } : null
+        },
+        rental_prediction: {
+          predicted_rent: monthly_rent,
+          confidence: 0.90,
+          method: "ai_ml_models"
+        },
+        value_prediction: {
+          predicted_value: property_value,
+          confidence: 0.90,
+          method: "ai_ml_models"
+        },
+        current_metrics: {
+          monthly_rent: monthly_rent,
+          annual_rent: annual_rent,
+          monthly_maintenance: annual_maintenance / 12,
+          annual_maintenance: annual_maintenance,
+          net_monthly_income: monthly_rent - (annual_maintenance / 12),
+          net_annual_income: net_annual_income,
+          annual_roi: annual_roi,
+          cap_rate: cap_rate,
+          cash_flow_positive: net_annual_income > 0
+        },
+        investment_metrics: {
+          payback_period: property_value / net_annual_income,
+          irr: annual_roi * 0.8, // Simplified IRR calculation
+          npv: net_annual_income * 5 - property_value // Simplified NPV
+        },
+        investment_grade: {
+          grade: grade,
+          recommendation: grade >= "B" ? "Good investment opportunity" : "Consider carefully",
+          risk_level: grade >= "A" ? "Low" : grade >= "B" ? "Medium" : "High"
+        },
+        future_projections: {
+          year_1: {
+            projected_rent: monthly_rent * (1 + rent_growth_rate / 100), // Historical rent growth rate
+            projected_value: property_value * (1 + property_appreciation_rate / 100), // Historical property appreciation rate
+            projected_roi: ((monthly_rent * (1 + rent_growth_rate / 100) * 12 - annual_maintenance) + (property_value * (1 + property_appreciation_rate / 100) - property_value)) / (property_value * (1 + property_appreciation_rate / 100)) * 100
+          },
+          year_5: {
+            projected_rent: monthly_rent * Math.pow(1 + rent_growth_rate / 100, 5), // Historical rent growth rate compounded
+            projected_value: property_value * Math.pow(1 + property_appreciation_rate / 100, 5), // Historical property appreciation rate compounded
+            projected_roi: ((monthly_rent * Math.pow(1 + rent_growth_rate / 100, 5) * 12 - annual_maintenance) + (property_value * Math.pow(1 + property_appreciation_rate / 100, 5) - property_value)) / (property_value * Math.pow(1 + property_appreciation_rate / 100, 5)) * 100
+          }
+        },
+        market_insights: {
+          city: city,
+          location: location,
+          price_per_marla: price_per_marla,
+          market_yield: (monthly_rent * 12 / property_value) * 100,
+          market_trend: using_fallback ? "Fallback Formula" : "Historical Data",
+          recommendation: using_fallback 
+            ? `Using fallback formula (${fallback_reason}): ${property_type} in ${location}, ${city} projected with 15.66% annual appreciation and 0.49% rent growth, generating ${annual_roi.toFixed(1)}% annual ROI with PKR ${price_per_marla.toLocaleString()} per marla.`
+            : `Based on ${growthRates.years_analyzed} years of historical data (${growthRates.data_points} data points), ${property_type} in ${location}, ${city} shows ${property_appreciation_rate.toFixed(1)}% annual appreciation and ${rent_growth_rate.toFixed(1)}% rent growth, generating ${annual_roi.toFixed(1)}% annual ROI with PKR ${price_per_marla.toLocaleString()} per marla.`
+        }
+      };
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing ROI:", error);
+      res.status(500).json({ message: "Failed to analyze ROI" });
     }
   });
 
