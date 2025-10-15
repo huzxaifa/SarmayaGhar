@@ -26,7 +26,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           {/* Logo */}
-          <Link href="/" className="flex items-center">
+          <Link href="/" className="flex items-center" onClick={() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })}>
             <img
               src="/sarmayaghar-logo.png"
               alt="SarmayaGhar logo"
@@ -44,6 +44,7 @@ export default function Navbar() {
                   <Link
                     key={item.name}
                     href={item.href}
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })}
                     className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive(item.href)
                         ? "text-primary bg-accent"
@@ -61,10 +62,10 @@ export default function Navbar() {
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="default" data-testid="button-signup">
+                <Button variant="default" data-testid="button-signup" onClick={() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })}>
               Sign Up
             </Button>
-            <Button variant="outline" data-testid="button-login">
+                <Button variant="outline" data-testid="button-login" onClick={() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })}>
               Login
             </Button>
           </div>

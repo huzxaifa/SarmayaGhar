@@ -10,13 +10,15 @@ export default function Footer() {
           {/* Company Info */}
           <div>
             <div className="flex items-center mb-6">
-              <div className="h-8 w-8 bg-accent rounded-lg flex items-center justify-center mr-3">
-                <span className="text-white font-bold text-lg">S</span>
-              </div>
+              <img
+                src="/sarmayaghar-logo.png"
+                alt="SarmayaGhar logo"
+                className="h-8 w-auto object-contain mr-3"
+              />
               <span className="text-xl font-bold">SarmayaGhar</span>
             </div>
             <p className="text-primary-foreground/80 text-sm leading-relaxed mb-4">
-              Pakistan's first AI-powered real estate investment platform. Make smarter property investments with advanced machine learning insights.
+              Pakistan's first ML-powered Real Estate platform. Make smarter property decisions with advanced machine learning.
             </p>
             <div className="flex space-x-4">
               <Button size="sm" variant="ghost" className="bg-white/10 hover:bg-white/20 p-2">
@@ -61,11 +63,11 @@ export default function Footer() {
             <div className="space-y-3 text-sm">
               <div className="flex items-center">
                 <Mail className="h-4 w-4 mr-3 text-primary-foreground/60" />
-                <span className="text-primary-foreground/80">hello@sarmayaghar.com</span>
+                <span className="text-primary-foreground/80">huzaifakhalid7c@gmail.com</span>
               </div>
               <div className="flex items-center">
                 <Phone className="h-4 w-4 mr-3 text-primary-foreground/60" />
-                <span className="text-primary-foreground/80">+92 300 1234567</span>
+                <span className="text-primary-foreground/80">+92 317 5137945</span>
               </div>
               <div className="flex items-start">
                 <MapPin className="h-4 w-4 mr-3 text-primary-foreground/60 mt-0.5" />

@@ -28,7 +28,7 @@ type QuickValuationData = z.infer<typeof quickValuationSchema>;
 
 export default function Home() {
   const [quickValuationResult, setQuickValuationResult] = useState<any>(null);
-  const { data: properties, isLoading: propertiesLoading } = useProperties();
+  const { data, isLoading: propertiesLoading } = useProperties();
   const valuationMutation = useValuation();
 
   const quickForm = useForm<QuickValuationData>({
@@ -55,7 +55,7 @@ export default function Home() {
     }
   };
 
-  const featuredProperties = properties?.slice(0, 3) || [];
+  const featuredProperties = (data?.items || []).slice(0, 3);
 
   return (
     <div className="min-h-screen">
@@ -65,7 +65,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <h1 className="text-4xl lg:text-6xl font-bold leading-tight mb-6">
-                AI-Powered Real Estate Investment Platform
+                Pakistan's First ML-Powered Real Estate Platform
               </h1>
               <p className="text-xl lg:text-2xl text-primary-foreground/80 mb-8 leading-relaxed">
                 Make smarter property investments with advanced machine learning models trained on Pakistani real estate data from Zameen and Graana.

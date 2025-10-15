@@ -8,14 +8,23 @@ import { useChat } from "@/hooks/useChat";
 export default function ChatBot() {
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { messages, sendMessage, isLoading } = useChat();
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = containerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      // fallback (should not scroll the whole page)
+      messagesEndRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages && messages.length > 0) {
+      scrollToBottom();
+    }
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -64,7 +73,7 @@ export default function ChatBot() {
             
             {/* Chat Messages */}
             <CardContent className="p-0">
-              <div className="h-96 overflow-y-auto p-6 space-y-4" data-testid="chat-messages-container">
+              <div ref={containerRef} className="h-96 overflow-y-auto p-6 space-y-4" data-testid="chat-messages-container">
                 {messages.map((message) => (
                   <div
                     key={message.id}

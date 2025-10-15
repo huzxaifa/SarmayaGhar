@@ -10,8 +10,16 @@ import Valuation from "@/pages/valuation";
 import Portfolio from "@/pages/portfolio";
 import HeatMap from "@/pages/heatmap";
 import NotFound from "@/pages/not-found";
+import { useEffect } from "react";
 
 function Router() {
+  // Ensure each route change scrolls to top
+  useEffect(() => {
+    // On initial mount and on each render triggered by route switch, scroll to top
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  });
   return (
     <Layout>
       <Switch>
