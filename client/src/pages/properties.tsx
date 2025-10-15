@@ -13,7 +13,8 @@ export default function Properties() {
   const [filters, setFilters] = useState<PropertyFilters>({});
   const [appliedFilters, setAppliedFilters] = useState<PropertyFilters>({});
   
-  const { data: properties, isLoading, error } = useProperties(appliedFilters);
+  const { data, isLoading, error } = useProperties(appliedFilters);
+  const properties = data?.items || [];
 
   const handleSearch = () => {
     setAppliedFilters(filters);
@@ -157,8 +158,8 @@ export default function Properties() {
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-primary mb-2">Available Properties</h2>
-                  <div className="text-muted-foreground">
-                    Showing {properties.length} properties
+                <div className="text-muted-foreground">
+                  Showing {properties.length} of {data?.total ?? properties.length} properties
                     {Object.keys(appliedFilters).length > 0 && " (filtered)"}
                   </div>
                 </div>

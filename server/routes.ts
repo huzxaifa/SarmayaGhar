@@ -10,26 +10,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Properties routes
   app.get("/api/properties", async (req, res) => {
     try {
-      const { city, propertyType, bedrooms, minPrice, maxPrice } = req.query;
+      const { city, propertyType, bedrooms, minPrice, maxPrice, q, page = "1", pageSize = "30", sort } = req.query as Record<string, string | undefined>;
       const filters: any = {};
-      
       if (city) filters.city = city;
       if (propertyType) filters.propertyType = propertyType;
       if (bedrooms) filters.bedrooms = parseInt(bedrooms as string);
-      
+
       let properties = await storage.getProperties(filters);
-      
+
+      // Text search across title/area/city/type
+      if (q && q.trim().length > 0) {
+        const term = q.trim().toLowerCase();
+        properties = properties.filter(p =>
+          p.title.toLowerCase().includes(term) ||
+          p.area.toLowerCase().includes(term) ||
+          p.city.toLowerCase().includes(term) ||
+          p.propertyType.toLowerCase().includes(term)
+        );
+      }
+
       // Filter by price range if provided
       if (minPrice || maxPrice) {
+        const min = minPrice ? parseFloat(minPrice) : -Infinity;
+        const max = maxPrice ? parseFloat(maxPrice) : Infinity;
         properties = properties.filter(property => {
           const price = parseFloat(property.price);
-          if (minPrice && price < parseFloat(minPrice as string)) return false;
-          if (maxPrice && price > parseFloat(maxPrice as string)) return false;
-          return true;
+          return price >= min && price <= max;
         });
       }
-      
-      res.json(properties);
+
+      // Sorting
+      if (sort) {
+        if (sort === "price_asc") properties = properties.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+        else if (sort === "price_desc") properties = properties.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+        else if (sort === "newest") properties = properties.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+
+      // Pagination
+      const pageNum = Math.max(1, parseInt(String(page)) || 1);
+      const pageSz = Math.min(100, Math.max(1, parseInt(String(pageSize)) || 30));
+      const total = properties.length;
+      const start = (pageNum - 1) * pageSz;
+      const items = properties.slice(start, start + pageSz);
+
+      res.json({ items, total, page: pageNum, pageSize: pageSz });
     } catch (error) {
       console.error("Error fetching properties:", error);
       res.status(500).json({ message: "Failed to fetch properties" });

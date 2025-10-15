@@ -1,5 +1,8 @@
 import { type Property, type InsertProperty, type Valuation, type InsertValuation, type PortfolioProperty, type InsertPortfolioProperty, type ChatMessage, type InsertChatMessage } from "@shared/schema";
 import { randomUUID } from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+import Papa from "papaparse";
 
 export interface IStorage {
   // Properties
@@ -31,12 +34,14 @@ export class MemStorage implements IStorage {
   private valuations: Map<string, Valuation>;
   private portfolioProperties: Map<string, PortfolioProperty>;
   private chatMessages: Map<string, ChatMessage>;
+  private datasetLoaded = false;
 
   constructor() {
     this.properties = new Map();
     this.valuations = new Map();
     this.portfolioProperties = new Map();
     this.chatMessages = new Map();
+    // seed minimal demo data; real data is lazy-loaded from CSV on first request
     this.seedData();
   }
 
@@ -124,6 +129,17 @@ export class MemStorage implements IStorage {
 
   // Properties methods
   async getProperties(filters?: Partial<Property>): Promise<Property[]> {
+    // Ensure dataset is loaded from CSV
+    if (!this.datasetLoaded) {
+      try {
+        await this.loadDatasetFromCsv();
+      } catch (e) {
+        // Fallback to seeded data if CSV read fails
+        // eslint-disable-next-line no-console
+        console.warn("Failed to load CSV dataset, using seeded properties only:", e);
+      }
+    }
+
     let properties = Array.from(this.properties.values());
     
     if (filters) {
@@ -259,3 +275,111 @@ export class MemStorage implements IStorage {
 }
 
 export const storage = new MemStorage();
+
+// Helpers
+interface CsvRow {
+  [key: string]: any;
+}
+
+function toNumberSafe(value: any, defaultValue = 0): number {
+  if (value === null || value === undefined) return defaultValue;
+  if (typeof value === "number") return Number.isFinite(value) ? value : defaultValue;
+  const cleaned = String(value).replace(/[,\s]/g, "");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : defaultValue;
+}
+
+function pick<T = any>(row: CsvRow, keys: string[], fallback?: any): T | any {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
+  }
+  return fallback;
+}
+
+// Extend class methods
+declare module "./storage" { interface MemStorage { loadDatasetFromCsv(): Promise<void>; mapCsvRowToProperty(row: CsvRow, index: number): Property | null; } }
+
+MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this: MemStorage): Promise<void> {
+  if (this.datasetLoaded) return;
+  const csvPath = path.join(process.cwd(), "attached_assets", "zameen-updated_1757269388792.csv");
+
+  if (!fs.existsSync(csvPath)) {
+    this.datasetLoaded = true; // avoid repeated attempts
+    return;
+  }
+
+  const fileStream = fs.createReadStream(csvPath, { encoding: "utf8" });
+
+  await new Promise<void>((resolve, reject) => {
+    let idx = 0;
+    Papa.parse<CsvRow>(fileStream as unknown as Papa.RemoteFile, {
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      worker: false,
+      step: (result) => {
+        try {
+          const prop = this.mapCsvRowToProperty(result.data, idx++);
+          if (prop) this.properties.set(prop.id, prop);
+        } catch (_) {
+          // ignore malformed row
+        }
+      },
+      complete: () => {
+        this.datasetLoaded = true;
+        resolve();
+      },
+      error: (err) => {
+        reject(err);
+      }
+    });
+  });
+};
+
+MemStorage.prototype.mapCsvRowToProperty = function mapCsvRowToProperty(this: MemStorage, row: CsvRow, index: number): Property | null {
+  // Heuristic field resolution across varying column names
+  const city = pick<string>(row, ["city", "City", "city_name"], "Karachi");
+  const area = pick<string>(row, ["location", "Area", "area", "neighbourhood", "Neighborhood"], "");
+  const propertyType = pick<string>(row, ["property_type", "Property Type", "type"], "House");
+  const bedrooms = toNumberSafe(pick(row, ["bedrooms", "Beds", "bedroom"], 0));
+  const bathrooms = toNumberSafe(pick(row, ["baths", "Bathrooms", "bathrooms"], 0));
+  const areaSize = toNumberSafe(pick(row, ["area_size", "Area (Marla)", "area", "size"], 0));
+  const price = toNumberSafe(pick(row, ["price", "total_price", "Price"], 0));
+  if (!city || !area || !propertyType || price <= 0 || areaSize <= 0) return null;
+
+  const id = `csv-${index + 1}`;
+  const title = `${propertyType} in ${area}`;
+
+  const lat = toNumberSafe(pick(row, ["latitude", "lat"], NaN));
+  const lng = toNumberSafe(pick(row, ["longitude", "lng"], NaN));
+
+  const images: string[] = [
+    "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1600&auto=format&fit=crop"
+  ];
+
+  const property: Property = {
+    id,
+    title,
+    description: null,
+    city: String(city),
+    area: String(area),
+    propertyType: String(propertyType),
+    bedrooms,
+    bathrooms,
+    areaSize: String(areaSize),
+    areaUnit: "marla",
+    price: String(price),
+    yearBuilt: null,
+    features: null,
+    images,
+    location: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
+    aiScore: null,
+    expectedROI: null,
+    rentalYield: null,
+    marketTrend: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  return property;
+};

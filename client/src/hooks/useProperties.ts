@@ -10,10 +10,11 @@ export function useProperties(filters?: PropertyFilters) {
   if (filters?.minPrice) params.append('minPrice', filters.minPrice.toString());
   if (filters?.maxPrice) params.append('maxPrice', filters.maxPrice.toString());
   
+  // support search text, pagination, and sorting later if needed
   const queryString = params.toString();
   const url = `/api/properties${queryString ? `?${queryString}` : ''}`;
 
-  return useQuery<Property[]>({
+  return useQuery<{ items: Property[]; total: number; page: number; pageSize: number }>({
     queryKey: ['/api/properties', filters],
     queryFn: async () => {
       const response = await fetch(url);
