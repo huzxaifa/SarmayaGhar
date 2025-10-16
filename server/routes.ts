@@ -44,7 +44,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (sort) {
         if (sort === "price_asc") properties = properties.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
         else if (sort === "price_desc") properties = properties.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-        else if (sort === "newest") properties = properties.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        else if (sort === "newest") properties = properties.sort((a, b) => new Date(b.createdAt || new Date()).getTime() - new Date(a.createdAt || new Date()).getTime());
       }
 
       // Pagination
@@ -71,6 +71,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching property:", error);
       res.status(500).json({ message: "Failed to fetch property" });
+    }
+  });
+
+  // Locations by city - for dependent dropdowns
+  app.get("/api/locations", async (req, res) => {
+    try {
+      const { city } = req.query as Record<string, string | undefined>;
+      if (!city || city.trim().length === 0) {
+        return res.status(400).json({ message: "city is required" });
+      }
+
+      const properties = await storage.getProperties({ city });
+      const set = new Set<string>();
+      for (const p of properties) {
+        if (p.area && typeof p.area === "string" && p.area.trim().length > 0) {
+          set.add(p.area.trim());
+        }
+      }
+      const locations = Array.from(set).sort((a, b) => a.localeCompare(b));
+      res.json({ city, locations });
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+      res.status(500).json({ message: "Failed to fetch locations" });
     }
   });
 

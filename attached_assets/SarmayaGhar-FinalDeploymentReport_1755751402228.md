@@ -1,7 +1,7 @@
 # SarmayaGhar - Final Deployment Report
 
 ## Project Overview
-SarmayaGhar is an AI-powered real estate web application designed to provide intelligent investment insights for the Pakistani real estate market. The application integrates machine learning models trained on comprehensive datasets from Zameen.com and Graana.com to deliver property valuation, rental yield estimation, ROI prediction, market trend analysis, and interactive heatmaps.
+SarmayaGhar is an AI-powered real estate web application designed to provide intelligent property insights for the Pakistani real estate market. The application integrates machine learning models trained on comprehensive datasets from Zameen.com to deliver property valuation, rental yield estimation, ROI prediction, market trend analysis, and interactive heatmaps.
 
 ## Key Features Implemented
 

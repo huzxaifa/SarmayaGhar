@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Brain, TrendingUp, Home, MapPin } from "lucide-react";
 import { PAKISTANI_CITIES, PROPERTY_TYPES, BEDROOM_OPTIONS, BATHROOM_OPTIONS, formatCurrency } from "@/lib/constants";
+import { useLocations } from "@/hooks/useProperties";
 import { apiRequest } from "@/lib/queryClient";
 
 const mlValuationSchema = z.object({
@@ -80,6 +81,11 @@ export default function MLValuationForm() {
       province: "Sindh",
     },
   });
+
+  // Dependent locations based on selected city
+  const selectedCity = form.watch("city");
+  const { data: locationsData, isLoading: locationsLoading } = useLocations(selectedCity);
+  const locationOptions = locationsData?.locations || [];
 
   // Check training status on component mount
   useEffect(() => {
@@ -212,14 +218,18 @@ export default function MLValuationForm() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Location/Area *</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="e.g. DHA Defence" 
-                            {...field} 
-                            data-testid="input-location"
-                            className="placeholder:text-muted-foreground/70"
-                          />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!selectedCity || locationsLoading}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-location">
+                              <SelectValue placeholder={selectedCity ? (locationsLoading ? "Loading..." : "Select Location") : "Select City first"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {locationOptions.map((loc) => (
+                              <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

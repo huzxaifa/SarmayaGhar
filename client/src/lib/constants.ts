@@ -4,9 +4,7 @@ export const PAKISTANI_CITIES = [
   "Islamabad",
   "Rawalpindi",
   "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Quetta"
+  // Removed cities without dataset coverage: Multan, Peshawar, Quetta
 ];
 
 export const PROPERTY_TYPES = [

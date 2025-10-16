@@ -174,12 +174,6 @@ Generate geospatial visualizations of property values, ROI potential, and market
 └─────────────────┘     └────────────────┘     └────────────────────┘
 ```
 
-## Implementation Timeline
-
-1. **Week 1**: Data preprocessing and feature engineering
-2. **Week 2**: Property Valuation and Rental Yield models
-3. **Week 3**: ROI Prediction and Market Trend models
-4. **Week 4**: Heatmap generation and model integration
 
 ## Evaluation Metrics
 

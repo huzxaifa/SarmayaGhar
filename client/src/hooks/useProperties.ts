@@ -47,3 +47,19 @@ export function useCreateProperty() {
     },
   });
 }
+
+export function useLocations(city?: string) {
+  const enabled = Boolean(city && city.trim().length > 0);
+  return useQuery<{ city: string; locations: string[] } | null>({
+    queryKey: ["/api/locations", city],
+    enabled,
+    queryFn: async () => {
+      if (!enabled) return null;
+      const url = `/api/locations?city=${encodeURIComponent(city!)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch locations');
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
