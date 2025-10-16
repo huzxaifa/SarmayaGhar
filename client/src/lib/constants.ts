@@ -15,7 +15,13 @@ export const PROPERTY_TYPES = [
   "Upper Portion",
   "Lower Portion",
   "Room",
-  "Penthouse"
+  "Penthouse",
+  "Farm House"
+];
+
+export const PURPOSE_OPTIONS = [
+  "For Sale",
+  "For Rent"
 ];
 
 export const PROPERTY_FEATURES = [

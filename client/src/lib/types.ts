@@ -5,6 +5,7 @@ export interface Property {
   city: string;
   area: string;
   propertyType: string;
+  purpose?: string;
   bedrooms: number;
   bathrooms: number;
   areaSize: string;
@@ -63,6 +64,7 @@ export interface PropertyFilters {
   bedrooms?: number;
   minPrice?: number;
   maxPrice?: number;
+  purpose?: string;
 }
 
 export interface PortfolioSummary {

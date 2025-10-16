@@ -50,11 +50,12 @@ export class MemStorage implements IStorage {
     const sampleProperties: Property[] = [
       {
         id: "1",
-        title: "Modern House in DHA Phase 6",
+        title: "Modern House For Sale in DHA Phase 6",
         description: "Luxury 4-bedroom house with swimming pool and garden",
         city: "Karachi",
         area: "DHA Phase 6",
         propertyType: "House",
+        purpose: "For Sale",
         bedrooms: 4,
         bathrooms: 5,
         areaSize: "5",
@@ -74,11 +75,12 @@ export class MemStorage implements IStorage {
       },
       {
         id: "2",
-        title: "Luxury Flat in Gulberg III",
+        title: "Luxury Flat For Rent in Gulberg III",
         description: "3-bedroom apartment with modern amenities",
         city: "Lahore",
         area: "Gulberg III",
         propertyType: "Flat",
+        purpose: "For Rent",
         bedrooms: 3,
         bathrooms: 4,
         areaSize: "2100",
@@ -98,11 +100,12 @@ export class MemStorage implements IStorage {
       },
       {
         id: "3",
-        title: "Penthouse in F-11 Markaz",
+        title: "Penthouse For Sale in F-11 Markaz",
         description: "4-bedroom penthouse with city view",
         city: "Islamabad",
         area: "F-11 Markaz",
         propertyType: "Penthouse",
+        purpose: "For Sale",
         bedrooms: 4,
         bathrooms: 5,
         areaSize: "2500",
@@ -312,6 +315,8 @@ MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this
 
   await new Promise<void>((resolve, reject) => {
     let idx = 0;
+    let loadedCount = 0;
+    
     Papa.parse<CsvRow>(fileStream as unknown as Papa.RemoteFile, {
       header: true,
       dynamicTyping: true,
@@ -320,13 +325,17 @@ MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this
       step: (result) => {
         try {
           const prop = this.mapCsvRowToProperty(result.data, idx++);
-          if (prop) this.properties.set(prop.id, prop);
+          if (prop) {
+            this.properties.set(prop.id, prop);
+            loadedCount++;
+          }
         } catch (_) {
           // ignore malformed row
         }
       },
       complete: () => {
         this.datasetLoaded = true;
+        console.log(`Loaded ${loadedCount} properties from CSV`);
         resolve();
       },
       error: (err) => {
@@ -337,37 +346,52 @@ MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this
 };
 
 MemStorage.prototype.mapCsvRowToProperty = function mapCsvRowToProperty(this: MemStorage, row: CsvRow, index: number): Property | null {
-  // Heuristic field resolution across varying column names
-  const city = pick<string>(row, ["city", "City", "city_name"], "Karachi");
-  const area = pick<string>(row, ["location", "Area", "area", "neighbourhood", "Neighborhood"], "");
-  const propertyType = pick<string>(row, ["property_type", "Property Type", "type"], "House");
+  // Map CSV columns to property fields
+  const city = pick<string>(row, ["city", "City", "city_name"], "");
+  const area = pick<string>(row, ["location", "Area", "neighbourhood", "Neighborhood"], "");
+  const propertyType = pick<string>(row, ["property_type", "Property Type", "type"], "");
   const bedrooms = toNumberSafe(pick(row, ["bedrooms", "Beds", "bedroom"], 0));
   const bathrooms = toNumberSafe(pick(row, ["baths", "Bathrooms", "bathrooms"], 0));
-  const areaSize = toNumberSafe(pick(row, ["area_size", "Area (Marla)", "area", "size"], 0));
+  const areaSize = toNumberSafe(pick(row, ["Area Size", "area_size", "Area (Marla)", "size"], 0));
+  const areaType = pick<string>(row, ["Area Type", "area_type", "area_unit"], "Marla");
   const price = toNumberSafe(pick(row, ["price", "total_price", "Price"], 0));
+  const purpose = pick<string>(row, ["purpose", "Purpose"], "For Sale");
+  
+  // Skip invalid rows
   if (!city || !area || !propertyType || price <= 0 || areaSize <= 0) return null;
 
   const id = `csv-${index + 1}`;
-  const title = `${propertyType} in ${area}`;
+  const title = `${propertyType} ${purpose} in ${area}`;
 
   const lat = toNumberSafe(pick(row, ["latitude", "lat"], NaN));
   const lng = toNumberSafe(pick(row, ["longitude", "lng"], NaN));
 
+  // Use default property images
   const images: string[] = [
-    "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1600&auto=format&fit=crop"
+    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400"
   ];
+
+  // Normalize area unit
+  let normalizedAreaUnit = "marla";
+  if (areaType) {
+    const areaTypeLower = String(areaType).toLowerCase();
+    if (areaTypeLower.includes("kanal")) normalizedAreaUnit = "kanal";
+    else if (areaTypeLower.includes("sq") || areaTypeLower.includes("ft")) normalizedAreaUnit = "sq ft";
+    else if (areaTypeLower.includes("marla")) normalizedAreaUnit = "marla";
+  }
 
   const property: Property = {
     id,
     title,
-    description: null,
-    city: String(city),
-    area: String(area),
-    propertyType: String(propertyType),
+    description: purpose ? `Property ${purpose.toLowerCase()} in ${area}, ${city}` : null,
+    city: String(city).trim(),
+    area: String(area).trim(),
+    propertyType: String(propertyType).trim(),
+    purpose: purpose ? String(purpose).trim() : null,
     bedrooms,
     bathrooms,
     areaSize: String(areaSize),
-    areaUnit: "marla",
+    areaUnit: normalizedAreaUnit,
     price: String(price),
     yearBuilt: null,
     features: null,

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { useProperties } from "@/hooks/useProperties";
 import PropertyCard from "@/components/PropertyCard";
-import { PAKISTANI_CITIES, PROPERTY_TYPES, BEDROOM_OPTIONS } from "@/lib/constants";
+import { PAKISTANI_CITIES, PROPERTY_TYPES, BEDROOM_OPTIONS, PURPOSE_OPTIONS } from "@/lib/constants";
 import type { PropertyFilters } from "@/lib/types";
 
 export default function Properties() {
@@ -41,7 +41,7 @@ export default function Properties() {
             <CardTitle>Search & Filter Properties</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
               <Select 
                 value={filters.city} 
                 onValueChange={(value) => setFilters(prev => ({ ...prev, city: value }))}
@@ -69,6 +69,22 @@ export default function Properties() {
                   {PROPERTY_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select 
+                value={filters.purpose} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, purpose: value }))}
+              >
+                <SelectTrigger data-testid="select-filter-purpose">
+                  <SelectValue placeholder="Purpose" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PURPOSE_OPTIONS.map((purpose) => (
+                    <SelectItem key={purpose} value={purpose}>
+                      {purpose}
                     </SelectItem>
                   ))}
                 </SelectContent>

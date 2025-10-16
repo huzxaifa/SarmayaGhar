@@ -10,11 +10,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Properties routes
   app.get("/api/properties", async (req, res) => {
     try {
-      const { city, propertyType, bedrooms, minPrice, maxPrice, q, page = "1", pageSize = "30", sort } = req.query as Record<string, string | undefined>;
+      const { city, propertyType, bedrooms, minPrice, maxPrice, purpose, q, page = "1", pageSize = "30", sort } = req.query as Record<string, string | undefined>;
       const filters: any = {};
       if (city) filters.city = city;
       if (propertyType) filters.propertyType = propertyType;
       if (bedrooms) filters.bedrooms = parseInt(bedrooms as string);
+      if (purpose) filters.purpose = purpose;
 
       let properties = await storage.getProperties(filters);
 

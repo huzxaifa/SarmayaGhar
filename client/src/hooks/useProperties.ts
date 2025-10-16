@@ -9,6 +9,7 @@ export function useProperties(filters?: PropertyFilters) {
   if (filters?.bedrooms) params.append('bedrooms', filters.bedrooms.toString());
   if (filters?.minPrice) params.append('minPrice', filters.minPrice.toString());
   if (filters?.maxPrice) params.append('maxPrice', filters.maxPrice.toString());
+  if (filters?.purpose) params.append('purpose', filters.purpose);
   
   // support search text, pagination, and sorting later if needed
   const queryString = params.toString();
