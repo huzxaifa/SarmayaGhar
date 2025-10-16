@@ -174,7 +174,6 @@ Generate geospatial visualizations of property values, ROI potential, and market
 └─────────────────┘     └────────────────┘     └────────────────────┘
 ```
 
-
 ## Evaluation Metrics
 
 - **Property Valuation**: RMSE, MAE, R²

@@ -30,11 +30,11 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
-  private properties: Map<string, Property>;
+  public properties: Map<string, Property>;
   private valuations: Map<string, Valuation>;
   private portfolioProperties: Map<string, PortfolioProperty>;
   private chatMessages: Map<string, ChatMessage>;
-  private datasetLoaded = false;
+  public datasetLoaded = false;
 
   constructor() {
     this.properties = new Map();
@@ -55,7 +55,6 @@ export class MemStorage implements IStorage {
         city: "Karachi",
         area: "DHA Phase 6",
         propertyType: "House",
-        purpose: "For Sale",
         bedrooms: 4,
         bathrooms: 5,
         areaSize: "5",
@@ -80,7 +79,6 @@ export class MemStorage implements IStorage {
         city: "Lahore",
         area: "Gulberg III",
         propertyType: "Flat",
-        purpose: "For Rent",
         bedrooms: 3,
         bathrooms: 4,
         areaSize: "2100",
@@ -105,7 +103,6 @@ export class MemStorage implements IStorage {
         city: "Islamabad",
         area: "F-11 Markaz",
         propertyType: "Penthouse",
-        purpose: "For Sale",
         bedrooms: 4,
         bathrooms: 5,
         areaSize: "2500",
@@ -317,7 +314,7 @@ MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this
     let idx = 0;
     let loadedCount = 0;
     
-    Papa.parse<CsvRow>(fileStream as unknown as Papa.RemoteFile, {
+    Papa.parse<CsvRow>(fileStream, {
       header: true,
       dynamicTyping: true,
       skipEmptyLines: true,
@@ -387,7 +384,6 @@ MemStorage.prototype.mapCsvRowToProperty = function mapCsvRowToProperty(this: Me
     city: String(city).trim(),
     area: String(area).trim(),
     propertyType: String(propertyType).trim(),
-    purpose: purpose ? String(purpose).trim() : null,
     bedrooms,
     bathrooms,
     areaSize: String(areaSize),

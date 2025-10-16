@@ -1,16 +1,26 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Home, Building, Calculator, Map, PieChart, MessageCircle } from "lucide-react";
+import { Menu, X, Home, Building, Calculator, Map, PieChart, LogOut, User, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Navbar() {
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
 
   const navigation = [
     { name: "Home", href: "/", icon: Home },
     { name: "Properties", href: "/properties", icon: Building },
     { name: "AI Valuation", href: "/valuation", icon: Calculator },
+    { name: "ROI Analysis", href: "/roi-analysis", icon: Target },
     { name: "Market Insights", href: "/heatmap", icon: Map },
     { name: "Portfolio", href: "/portfolio", icon: PieChart },
   ];
@@ -60,14 +70,42 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Auth Buttons */}
+          {/* Auth Section */}
           <div className="hidden md:flex items-center space-x-4">
-                <Button variant="default" data-testid="button-signup" onClick={() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })}>
-              Sign Up
-            </Button>
-                <Button variant="outline" data-testid="button-login" onClick={() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })}>
-              Login
-            </Button>
+            {isAuthenticated ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center space-x-2">
+                    <User className="h-4 w-4" />
+                    <span>{user?.name}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>{user?.email}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Link href="/register">
+                  <Button variant="default" data-testid="button-signup">
+                    Sign Up
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button variant="outline" data-testid="button-login">
+                    Login
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -109,12 +147,36 @@ export default function Navbar() {
             })}
             <div className="pt-4 pb-3 border-t border-gray-200">
               <div className="flex flex-col space-y-3 px-3">
-                <Button variant="default" className="w-full" data-testid="mobile-button-signup">
-                  Sign Up
-                </Button>
-                <Button variant="outline" className="w-full" data-testid="mobile-button-login">
-                  Login
-                </Button>
+                {isAuthenticated ? (
+                  <>
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      <div className="font-medium">{user?.name}</div>
+                      <div>{user?.email}</div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full" 
+                      onClick={logout}
+                      data-testid="mobile-button-logout"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/register">
+                      <Button variant="default" className="w-full" data-testid="mobile-button-signup">
+                        Sign Up
+                      </Button>
+                    </Link>
+                    <Link href="/login">
+                      <Button variant="outline" className="w-full" data-testid="mobile-button-login">
+                        Login
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>

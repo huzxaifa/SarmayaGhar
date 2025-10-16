@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Decision Tree Regressor Training Script
-Trains a Decision Tree model on Pakistani real estate data
-"""
-
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split

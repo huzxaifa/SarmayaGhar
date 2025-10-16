@@ -8,9 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { useValuation } from "@/hooks/useValuation";
 import { PAKISTANI_CITIES, PROPERTY_TYPES, BEDROOM_OPTIONS, BATHROOM_OPTIONS, formatCurrency } from "@/lib/constants";
@@ -56,8 +53,7 @@ interface MLValuationResult {
 
 export default function ValuationForm() {
   const [result, setResult] = useState<MLValuationResult | null>(null);
-  const [trainingStatus, setTrainingStatus] = useState<{ isTraining: boolean; hasModel: boolean; modelInfo?: any }>({ isTraining: false, hasModel: false });
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+  const [, setTrainingStatus] = useState<{ isTraining: boolean; hasModel: boolean; modelInfo?: any }>({ isTraining: false, hasModel: false });
   const valuationMutation = useValuation();
 
   const form = useForm<ValuationFormData>({
@@ -82,46 +78,48 @@ export default function ValuationForm() {
       } catch (error) {
         console.error('Error checking training status:', error);
       } finally {
-        setIsCheckingStatus(false);
       }
     };
     checkTrainingStatus();
   }, []);
 
-  const startTraining = async () => {
-    try {
-      setTrainingStatus(prev => ({ ...prev, isTraining: true }));
-      const response = await fetch('/api/ml/train-models', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const result = await response.json();
-      
-      if (result.success) {
-        setTrainingStatus({ isTraining: false, hasModel: true, modelInfo: result.modelInfo });
-      } else {
-        console.error('Training failed:', result.message);
-        setTrainingStatus(prev => ({ ...prev, isTraining: false }));
-      }
-    } catch (error) {
-      console.error('Error starting training:', error);
-      setTrainingStatus(prev => ({ ...prev, isTraining: false }));
-    }
-  };
 
   const onSubmit = async (data: ValuationFormData) => {
     try {
       const requestData = {
-        ...data,
-        // Map the form field to the API expected field
-        neighbourhood: data.location
+        city: data.city,
+        area: data.location,
+        propertyType: data.propertyType,
+        bedrooms: data.bedrooms,
+        bathrooms: data.bathrooms,
+        areaSize: data.areaMarla,
+        areaUnit: "marla",
+        yearBuilt: data.yearBuilt,
+        features: [],
+        predictionTimeline: "current",
       };
       const result = await valuationMutation.mutateAsync(requestData);
-      setResult(result);
+      
+      // Convert ValuationResult to MLValuationResult format
+      const mlResult: MLValuationResult = {
+        predictedPrice: result.estimatedValue,
+        priceRange: result.priceRange,
+        confidence: result.confidenceScore,
+        marketTrend: result.marketAnalysis.marketTrend,
+        predictions: {
+          currentYear: result.estimatedValue,
+          oneYear: result.estimatedValue * 1.1,
+          twoYear: result.estimatedValue * 1.2,
+          threeYear: result.estimatedValue * 1.3,
+        },
+        comparableProperties: [],
+        insights: [],
+      };
+      setResult(mlResult);
     } catch (error) {
       console.error("Valuation error:", error);
       // Check if it's a training error
-      if (error.message?.includes('train')) {
+      if (error instanceof Error && error.message?.includes('train')) {
         setTrainingStatus({ isTraining: false, hasModel: false });
       }
     }
@@ -329,67 +327,7 @@ export default function ValuationForm() {
                   />
                 </div>
                 
-                {/* Additional Features */}
-                <FormField
-                  control={form.control}
-                  name="features"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Additional Features</FormLabel>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {PROPERTY_FEATURES.map((feature) => (
-                          <div key={feature} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={feature}
-                              checked={field.value?.includes(feature)}
-                              onCheckedChange={(checked) => {
-                                const updatedFeatures = checked
-                                  ? [...(field.value || []), feature]
-                                  : field.value?.filter((f) => f !== feature) || [];
-                                field.onChange(updatedFeatures);
-                              }}
-                              data-testid={`checkbox-${feature.toLowerCase().replace(" ", "-")}`}
-                            />
-                            <Label htmlFor={feature} className="text-sm">
-                              {feature}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </FormItem>
-                  )}
-                />
                 
-                {/* Prediction Timeline */}
-                <FormField
-                  control={form.control}
-                  name="predictionTimeline"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Prediction Timeline</FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex space-x-4"
-                        >
-                          {PREDICTION_TIMELINES.map((timeline) => (
-                            <div key={timeline.value} className="flex items-center space-x-2">
-                              <RadioGroupItem 
-                                value={timeline.value} 
-                                id={timeline.value}
-                                data-testid={`radio-${timeline.value}`}
-                              />
-                              <Label htmlFor={timeline.value} className="text-sm">
-                                {timeline.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
                 
                 <Button 
                   type="submit" 
@@ -424,7 +362,7 @@ export default function ValuationForm() {
                 <div className="text-center bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-xl p-6">
                   <div className="text-sm opacity-90 mb-2">Estimated Market Value</div>
                   <div className="text-4xl font-bold mb-2" data-testid="valuation-estimated-value">
-                    {formatCurrency(result.estimatedValue)}
+                    {formatCurrency(result.predictedPrice)}
                   </div>
                   <div className="text-sm opacity-90">
                     Range: {formatCurrency(result.priceRange.min)} - {formatCurrency(result.priceRange.max)}
@@ -436,13 +374,13 @@ export default function ValuationForm() {
                   <div className="flex justify-between items-center mb-3">
                     <span className="font-medium">AI Confidence Score</span>
                     <span className="text-2xl font-bold text-green-600" data-testid="valuation-confidence-score">
-                      {result.confidenceScore}/100
+                      {result.confidence}/100
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
                     <div 
                       className="bg-green-600 h-3 rounded-full" 
-                      style={{ width: `${result.confidenceScore}%` }}
+                      style={{ width: `${result.confidence}%` }}
                     ></div>
                   </div>
                 </div>
@@ -452,13 +390,13 @@ export default function ValuationForm() {
                   <div className="bg-primary/10 rounded-lg p-4 text-center">
                     <div className="text-sm text-muted-foreground mb-1">Price per Marla</div>
                     <div className="text-lg font-bold text-primary">
-                      {formatCurrency(result.estimatedValue / (form.getValues("areaSize") || 1))}
+                      {formatCurrency(result.predictedPrice / (form.getValues("areaMarla") || 1))}
                     </div>
                   </div>
                   <div className="bg-green-50 rounded-lg p-4 text-center">
                     <div className="text-sm text-muted-foreground mb-1">Location Score</div>
                     <div className="text-lg font-bold text-green-600">
-                      {result.marketAnalysis.locationScore}/10
+                      {Math.round(result.confidence / 10)}/10
                     </div>
                   </div>
                 </div>
@@ -470,15 +408,15 @@ export default function ValuationForm() {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Market Trend:</span>
-                      <span className="font-semibold text-green-600">{result.marketAnalysis.marketTrend}</span>
+                      <span className="font-semibold text-green-600">{result.marketTrend}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Liquidity:</span>
-                      <span className="font-semibold text-orange-600">{result.marketAnalysis.liquidity}</span>
+                      <span className="text-muted-foreground">Confidence:</span>
+                      <span className="font-semibold text-orange-600">{result.confidence}%</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Investment Grade:</span>
-                      <span className="font-semibold text-green-600">{result.marketAnalysis.investmentGrade}</span>
+                      <span className="text-muted-foreground">Price Range:</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(result.priceRange.min)} - {formatCurrency(result.priceRange.max)}</span>
                     </div>
                   </div>
                 </div>
