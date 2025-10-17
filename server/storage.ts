@@ -1,4 +1,6 @@
-import { type Property, type InsertProperty, type Valuation, type InsertValuation, type PortfolioProperty, type InsertPortfolioProperty, type ChatMessage, type InsertChatMessage } from "@shared/schema";
+import { type Property, type InsertProperty, type Valuation, type InsertValuation, type PortfolioProperty, type InsertPortfolioProperty, type ChatMessage, type InsertChatMessage, properties as propertiesTable, valuations as valuationsTable, portfolioProperties as portfolioTable, chatMessages as chatTable } from "@shared/schema";
+import { db } from "./db";
+import { and, eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -274,7 +276,203 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Database-backed storage implementation using Drizzle ORM
+export class DbStorage implements IStorage {
+  private fallbackStorage = new MemStorage();
+
+  async getProperties(filters?: Partial<Property>): Promise<Property[]> {
+    try {
+      if (!filters || Object.keys(filters).length === 0) {
+        return await db.select().from(propertiesTable);
+      }
+
+      const conditions: any[] = [];
+      if (filters.city) conditions.push(eq(propertiesTable.city, filters.city));
+      if (filters.area) conditions.push(eq(propertiesTable.area, filters.area));
+      if (filters.propertyType) conditions.push(eq(propertiesTable.propertyType, filters.propertyType));
+      if (typeof filters.bedrooms === "number") conditions.push(eq(propertiesTable.bedrooms, filters.bedrooms));
+      if (typeof filters.bathrooms === "number") conditions.push(eq(propertiesTable.bathrooms, filters.bathrooms));
+      if (typeof filters.isActive === "boolean") conditions.push(eq(propertiesTable.isActive, filters.isActive));
+
+      if (conditions.length === 0) {
+        return await db.select().from(propertiesTable);
+      }
+      return await db.select().from(propertiesTable).where(and(...conditions));
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getProperties(filters);
+    }
+  }
+
+  async getProperty(id: string): Promise<Property | undefined> {
+    try {
+      const rows = await db.select().from(propertiesTable).where(eq(propertiesTable.id, id));
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getProperty(id);
+    }
+  }
+
+  async createProperty(property: InsertProperty): Promise<Property> {
+    try {
+      const rows = await db.insert(propertiesTable).values({
+        ...property,
+        description: property.description ?? null,
+        yearBuilt: property.yearBuilt ?? null,
+        features: (property.features as string[] | null) ?? null,
+        images: (property.images as string[] | null) ?? null,
+        location: property.location ?? null,
+        aiScore: property.aiScore ?? null,
+        expectedROI: property.expectedROI ?? null,
+        rentalYield: property.rentalYield ?? null,
+        marketTrend: property.marketTrend ?? null,
+      }).returning();
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.createProperty(property);
+    }
+  }
+
+  async updateProperty(id: string, property: Partial<Property>): Promise<Property | undefined> {
+    try {
+      const rows = await db.update(propertiesTable)
+        .set({ ...property, updatedAt: new Date() })
+        .where(eq(propertiesTable.id, id))
+        .returning();
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.updateProperty(id, property);
+    }
+  }
+
+  async deleteProperty(id: string): Promise<boolean> {
+    try {
+      const rows = await db.delete(propertiesTable).where(eq(propertiesTable.id, id)).returning({ id: propertiesTable.id });
+      return rows.length > 0;
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.deleteProperty(id);
+    }
+  }
+
+  async getValuations(): Promise<Valuation[]> {
+    try {
+      return await db.select().from(valuationsTable);
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getValuations();
+    }
+  }
+
+  async getValuation(id: string): Promise<Valuation | undefined> {
+    try {
+      const rows = await db.select().from(valuationsTable).where(eq(valuationsTable.id, id));
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getValuation(id);
+    }
+  }
+
+  async createValuation(valuation: InsertValuation): Promise<Valuation> {
+    try {
+      const rows = await db.insert(valuationsTable).values({
+        ...valuation,
+        yearBuilt: valuation.yearBuilt ?? null,
+        features: (valuation.features as string[] | null) ?? null,
+        insights: (valuation.insights as string[] | null) ?? null,
+      }).returning();
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.createValuation(valuation);
+    }
+  }
+
+  async getPortfolioProperties(): Promise<PortfolioProperty[]> {
+    try {
+      return await db.select().from(portfolioTable);
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getPortfolioProperties();
+    }
+  }
+
+  async getPortfolioProperty(id: string): Promise<PortfolioProperty | undefined> {
+    try {
+      const rows = await db.select().from(portfolioTable).where(eq(portfolioTable.id, id));
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getPortfolioProperty(id);
+    }
+  }
+
+  async createPortfolioProperty(portfolioProperty: InsertPortfolioProperty): Promise<PortfolioProperty> {
+    try {
+      const rows = await db.insert(portfolioTable).values({
+        ...portfolioProperty,
+        monthlyRent: portfolioProperty.monthlyRent ?? null,
+        propertyId: portfolioProperty.propertyId ?? null,
+        isRented: portfolioProperty.isRented ?? null,
+      }).returning();
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.createPortfolioProperty(portfolioProperty);
+    }
+  }
+
+  async updatePortfolioProperty(id: string, portfolioProperty: Partial<PortfolioProperty>): Promise<PortfolioProperty | undefined> {
+    try {
+      const rows = await db.update(portfolioTable)
+        .set({ ...portfolioProperty, updatedAt: new Date() })
+        .where(eq(portfolioTable.id, id))
+        .returning();
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.updatePortfolioProperty(id, portfolioProperty);
+    }
+  }
+
+  async deletePortfolioProperty(id: string): Promise<boolean> {
+    try {
+      const rows = await db.delete(portfolioTable).where(eq(portfolioTable.id, id)).returning({ id: portfolioTable.id });
+      return rows.length > 0;
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.deletePortfolioProperty(id);
+    }
+  }
+
+  async getChatMessages(): Promise<ChatMessage[]> {
+    try {
+      return await db.select().from(chatTable);
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.getChatMessages();
+    }
+  }
+
+  async createChatMessage(chatMessage: InsertChatMessage): Promise<ChatMessage> {
+    try {
+      const rows = await db.insert(chatTable).values({
+        ...chatMessage,
+        context: chatMessage.context ?? null,
+      }).returning();
+      return rows[0];
+    } catch (error) {
+      console.warn("Database connection failed, falling back to in-memory storage:", error);
+      return await this.fallbackStorage.createChatMessage(chatMessage);
+    }
+  }
+}
+
+export const storage = new DbStorage();
 
 // Helpers
 interface CsvRow {
