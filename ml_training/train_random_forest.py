@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""
-Random Forest Regressor Training Script
-Trains a Random Forest model on Pakistani real estate data
-"""
-
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score, cross_validate
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -118,8 +113,37 @@ print(f"   R² Score: {r2:.4f}")
 print(f"   Mean Squared Error: {mse:,.0f}")
 print(f"   Mean Absolute Error: {mae:,.0f}")
 
+# Cross-validation evaluation
+print("\n6. Cross-validation analysis...")
+cv_scores = cross_validate(
+    model, X, y, 
+    cv=10, 
+    scoring=['r2', 'neg_mean_squared_error', 'neg_mean_absolute_error'],
+    return_train_score=True,
+    n_jobs=-1
+)
+
+train_r2_mean = cv_scores['train_r2'].mean()
+train_r2_std = cv_scores['train_r2'].std()
+test_r2_mean = cv_scores['test_r2'].mean()
+test_r2_std = cv_scores['test_r2'].std()
+
+overfitting_gap = train_r2_mean - test_r2_mean
+overfitting_percentage = (overfitting_gap / train_r2_mean) * 100
+
+print(f"   Cross-validation R² (Train): {train_r2_mean:.4f} ± {train_r2_std:.4f}")
+print(f"   Cross-validation R² (Test):  {test_r2_mean:.4f} ± {test_r2_std:.4f}")
+print(f"   Overfitting Gap: {overfitting_gap:.4f} ({overfitting_percentage:.2f}%)")
+
+if overfitting_percentage > 10:
+    print("   ⚠️  WARNING: High overfitting detected!")
+elif overfitting_percentage < 2:
+    print("   ⚠️  WARNING: Possible underfitting detected!")
+else:
+    print("   ✅ Good generalization balance!")
+
 # Save model
-print("\n6. Saving model...")
+print("\n7. Saving model...")
 os.makedirs("trained_models/Random_Forest", exist_ok=True)
 
 model_path = "trained_models/Random_Forest/model.pkl"
@@ -154,6 +178,14 @@ metadata = {
         "max_depth": 15,
         "min_samples_split": 10,
         "min_samples_leaf": 5
+    },
+    "cross_validation": {
+        "train_r2_mean": float(train_r2_mean),
+        "train_r2_std": float(train_r2_std),
+        "test_r2_mean": float(test_r2_mean),
+        "test_r2_std": float(test_r2_std),
+        "overfitting_gap": float(overfitting_gap),
+        "overfitting_percentage": float(overfitting_percentage)
     }
 }
 

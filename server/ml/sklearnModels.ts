@@ -56,7 +56,7 @@ export class SklearnModelManager {
   }
 
   private loadAvailableModels(): void {
-    const modelDirectories = ['Decision_Tree', 'Random_Forest', 'Gradient_Boosting', 'XGBoost'];
+    const modelDirectories = ['Decision_Tree', 'Random_Forest', 'Gradient_Boosting','Linear_Regression', 'XGBoost', 'Deep_Learning'];
     
     this.availableModels = [];
     
@@ -256,10 +256,11 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def load_encoders(encoder_path):
-    """Load encoders from pickle file"""
+    """Load encoders from pickle file with enhanced error handling"""
     try:
         with open(encoder_path, 'rb') as f:
             encoders = pickle.load(f)
+        print(f"Successfully loaded encoders from {encoder_path}", file=sys.stderr)
         return encoders
     except Exception as e:
         print(f"Error loading encoders: {e}", file=sys.stderr)
@@ -267,48 +268,68 @@ def load_encoders(encoder_path):
         try:
             with open(encoder_path, 'rb') as f:
                 encoders = pickle.load(f, encoding='latin1')
+            print(f"Successfully loaded encoders with latin1 encoding", file=sys.stderr)
             return encoders
         except Exception as e2:
             print(f"Error loading encoders with latin1 encoding: {e2}", file=sys.stderr)
-            return {}
+            # Try with joblib as fallback
+            try:
+                import joblib
+                encoders = joblib.load(encoder_path)
+                print(f"Successfully loaded encoders with joblib", file=sys.stderr)
+                return encoders
+            except Exception as e3:
+                print(f"Error loading encoders with joblib: {e3}", file=sys.stderr)
+                return {}
 
 def load_model(model_path):
-    """Load sklearn model from pickle file"""
+    """Load sklearn model from pickle file with enhanced compatibility"""
     try:
         with open(model_path, 'rb') as f:
             model = pickle.load(f)
+        print(f"Successfully loaded model from {model_path}", file=sys.stderr)
         return model
     except Exception as e:
-        print(f"Error loading model: {e}", file=sys.stderr)
-        # Try with different protocol
+        print(f"Error loading model with pickle: {e}", file=sys.stderr)
+        # Try with joblib (preferred for sklearn models)
         try:
-            with open(model_path, 'rb') as f:
-                model = pickle.load(f, encoding='latin1')
+            import joblib
+            model = joblib.load(model_path)
+            print(f"Successfully loaded model with joblib", file=sys.stderr)
             return model
         except Exception as e2:
-            print(f"Error loading model with latin1 encoding: {e2}", file=sys.stderr)
-            # Try with custom unpickler that ignores version issues
+            print(f"Error loading model with joblib: {e2}", file=sys.stderr)
+            # Try with different encoding
             try:
-                class CustomUnpickler(pickle.Unpickler):
-                    def find_class(self, module, name):
-                        # Handle version compatibility issues
-                        if module.startswith('sklearn'):
-                            # Try to import from current sklearn version
-                            try:
-                                import importlib
-                                mod = importlib.import_module(module)
-                                return getattr(mod, name)
-                            except:
-                                pass
-                        return super().find_class(module, name)
-                
                 with open(model_path, 'rb') as f:
-                    unpickler = CustomUnpickler(f)
-                    model = unpickler.load()
+                    model = pickle.load(f, encoding='latin1')
+                print(f"Successfully loaded model with latin1 encoding", file=sys.stderr)
                 return model
             except Exception as e3:
-                print(f"Error loading model with custom unpickler: {e3}", file=sys.stderr)
-                return None
+                print(f"Error loading model with latin1 encoding: {e3}", file=sys.stderr)
+                # Try with custom unpickler that ignores version issues
+                try:
+                    class CustomUnpickler(pickle.Unpickler):
+                        def find_class(self, module, name):
+                            # Handle version compatibility issues
+                            if module.startswith('sklearn'):
+                                # Try to import from current sklearn version
+                                try:
+                                    import importlib
+                                    mod = importlib.import_module(module)
+                                    return getattr(mod, name)
+                                except:
+                                    pass
+                            return super().find_class(module, name)
+                    
+                    with open(model_path, 'rb') as f:
+                        unpickler = CustomUnpickler(f)
+                        model = unpickler.load()
+                    print(f"Successfully loaded model with custom unpickler", file=sys.stderr)
+                    return model
+                except Exception as e4:
+                    print(f"Error loading model with custom unpickler: {e4}", file=sys.stderr)
+                    return None
 
 def load_features(features_path):
     """Load feature names from pickle file"""
@@ -321,8 +342,14 @@ def load_features(features_path):
         return []
 
 def encode_features(request, encoders):
-    """Encode categorical features using loaded encoders"""
+    """Encode categorical features using loaded encoders with enhanced validation"""
     try:
+        # Validate input request
+        required_fields = ['propertyType', 'location', 'city', 'areaMarla', 'bedrooms', 'bathrooms', 'yearBuilt']
+        for field in required_fields:
+            if field not in request:
+                print(f"Warning: Missing required field '{field}' in request", file=sys.stderr)
+        
         # Default encodings for unknown values
         default_encodings = {
             'property_type': 0,
@@ -439,10 +466,20 @@ def main():
             print(json.dumps({"error": "Failed to load model"}), file=sys.stderr)
             sys.exit(1)
         
+        # Validate model type and capabilities
+        model_type = type(model).__name__
+        print(f"Loaded model type: {model_type}", file=sys.stderr)
+        
         encoders = load_encoders(encoder_path)
         if not encoders:
             print(json.dumps({"error": "Failed to load encoders"}), file=sys.stderr)
             sys.exit(1)
+        
+        # Validate encoder structure
+        required_encoders = ['property_type_encoder', 'location_encoder', 'city_encoder']
+        missing_encoders = [enc for enc in required_encoders if enc not in encoders]
+        if missing_encoders:
+            print(f"Warning: Missing encoders: {missing_encoders}", file=sys.stderr)
         
         # Encode features
         features = encode_features(request, encoders)
@@ -453,10 +490,27 @@ def main():
         # Make prediction
         prediction = model.predict(features)[0]
         
+        # Get prediction confidence if available (for some models)
+        confidence = None
+        if hasattr(model, 'predict_proba'):
+            try:
+                # For models that support probability estimation
+                proba = model.predict_proba(features)[0]
+                confidence = float(max(proba)) if len(proba) > 0 else None
+            except:
+                pass
+        
         # Ensure prediction is positive and reasonable
         prediction = max(1000000, prediction)  # Minimum 1 million PKR
         
-        print(json.dumps({"prediction": float(prediction)}))
+        # Log prediction details for debugging
+        print(f"Prediction: {prediction:.2f}, Confidence: {confidence}", file=sys.stderr)
+        
+        result = {"prediction": float(prediction)}
+        if confidence is not None:
+            result["confidence"] = confidence
+            
+        print(json.dumps(result))
         
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
@@ -491,6 +545,10 @@ if __name__ == "__main__":
           try {
             const result = JSON.parse(stdout);
             if (result.prediction !== undefined) {
+              // Log additional information if available
+              if (result.confidence !== undefined) {
+                console.log(`Python prediction confidence: ${result.confidence}`);
+              }
               resolve(result.prediction);
             } else {
               reject(new Error('No prediction in result'));
@@ -499,6 +557,7 @@ if __name__ == "__main__":
             reject(new Error(`Failed to parse prediction result: ${error}`));
           }
         } else {
+          console.error(`Python script stderr: ${stderr}`);
           reject(new Error(`Python script failed with code ${code}: ${stderr}`));
         }
       });
