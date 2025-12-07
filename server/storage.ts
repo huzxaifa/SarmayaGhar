@@ -1,5 +1,5 @@
 import { type Property, type InsertProperty, type Valuation, type InsertValuation, type PortfolioProperty, type InsertPortfolioProperty, type ChatMessage, type InsertChatMessage, properties as propertiesTable, valuations as valuationsTable, portfolioProperties as portfolioTable, chatMessages as chatTable } from "@shared/schema";
-import { db } from "./db";
+import { db } from "./db.js";
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import * as fs from "fs";

@@ -1,21 +1,74 @@
 import OpenAI from "openai";
 
-// Get API key from environment variables
-const apiKey = process.env.OPENAI_API_KEY;
+// Default URL should include /v1 for OpenAI-compatible API
+// Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues on Windows
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434/v1";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:3b";
 
-if (!apiKey) {
-  console.warn("⚠️  OPENAI_API_KEY not found in environment variables. Chatbot functionality may be limited.");
+// Normalize base URL - replace localhost with 127.0.0.1 and ensure it ends with /v1 for OpenAI client
+const normalizeURL = (url: string): string => {
+  // Replace localhost with 127.0.0.1 to avoid IPv6 resolution issues
+  url = url.replace(/localhost/g, '127.0.0.1');
+  // Ensure it ends with /v1 for OpenAI client
+  return url.endsWith('/v1') ? url : url.replace(/\/+$/, '') + '/v1';
+};
+
+const normalizedBaseURL = normalizeURL(OLLAMA_BASE_URL);
+
+// Ollama doesn't require an API key, but we include it for compatibility
+const ollama = new OpenAI({
+  baseURL: normalizedBaseURL,
+  apiKey: "ollama", // Dummy key - Ollama doesn't require authentication
+});
+
+async function checkOllamaAvailability(): Promise<boolean> {
+  try {
+    // Remove /v1 and trailing slashes to get base URL for /api/tags
+    // Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
+    const baseUrl = normalizedBaseURL
+      .replace('/v1', '')
+      .replace(/\/+$/, '') || 'http://127.0.0.1:11434';
+    const url = `${baseUrl}/api/tags`;
+    
+    console.log(`[DEBUG] Checking Ollama availability at: ${url}`);
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Ollama API returned status ${response.status} for ${url}`);
+      return false;
+    }
+    
+    const data = await response.json() as { models?: Array<{ name?: string }> };
+    const hasModels = (data.models?.length ?? 0) > 0;
+    
+    if (hasModels) {
+      console.log(`✅ Found ${data.models!.length} model(s) in Ollama`);
+      console.log(`[DEBUG] Models: ${data.models!.map(m => m.name).join(', ')}`);
+    } else {
+      console.warn("⚠️ Ollama is running but no models found");
+    }
+    
+    return hasModels;
+  } catch (error: any) {
+    console.error("Ollama availability check error:", error?.message || error);
+    console.error("Full error:", error);
+    return false;
+  }
 }
 
-// Initialize OpenAI client
-const openai = apiKey ? new OpenAI({ 
-  apiKey: apiKey
-}) : null;
-
-// Check if OpenAI is properly configured
-if (!openai) {
-  console.warn("⚠️  OpenAI client not initialized. Please set OPENAI_API_KEY in your .env file.");
-}
+// Check availability on startup
+checkOllamaAvailability().then(available => {
+  if (available) {
+    console.log(`✅ Ollama is available at ${OLLAMA_BASE_URL}`);
+    console.log(`📦 Using model: ${OLLAMA_MODEL}`);
+  } else {
+    console.warn(`⚠️  Ollama not detected at ${OLLAMA_BASE_URL}`);
+    console.warn(`💡 To set up Ollama:`);
+    console.warn(`   1. Install: https://ollama.ai/download`);
+    console.warn(`   2. Run: ollama pull ${OLLAMA_MODEL}`);
+    console.warn(`   3. Ensure Ollama is running on port 11434`);
+  }
+});
 
 export interface ChatResponse {
   message: string;
@@ -23,11 +76,13 @@ export interface ChatResponse {
 }
 
 export async function getChatResponse(message: string, _context?: any): Promise<ChatResponse> {
-  // Check if OpenAI client is available
-  if (!openai) {
-    console.error("OpenAI client not initialized. API key may be missing.");
+  // Check if Ollama is available
+  const isAvailable = await checkOllamaAvailability();
+  
+  if (!isAvailable) {
+    console.warn("Ollama not available. Using fallback response.");
     return {
-      message: "I'm currently unable to connect to the AI service. Please ensure the OpenAI API key is properly configured in the environment variables. I can still help you with property valuations and market analysis through our ML models.",
+      message: "I'm currently unable to connect to the AI service. Please ensure Ollama is installed and running. You can install it from https://ollama.ai and run 'ollama pull llama3.2:3b'. I can still help you with property valuations and market analysis through our ML models.",
       suggestions: [
         "Try our property valuation tool",
         "Check market insights",
@@ -51,29 +106,44 @@ Always provide practical, actionable advice based on current Pakistani real esta
 
 Context: Pakistani real estate market is recovering in 2025 with interest rates dropping from 22% to 12-13%. Property values are expected to rise 10-15% annually.
 
-Please respond in JSON format with the following structure:
+IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {
   "message": "your response here",
   "suggestions": ["suggestion1", "suggestion2", "suggestion3", "suggestion4"]
-}`;
+}
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Using gpt-4o as gpt-5 might not be available
+Do not include any text before or after the JSON.`;
+
+    const response = await ollama.chat.completions.create({
+      model: OLLAMA_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      response_format: { type: "json_object" },
-      max_tokens: 500,
       temperature: 0.7,
+      max_tokens: 500,
     });
 
-    const content = response.choices[0].message.content;
+    const content = response.choices[0]?.message?.content;
     if (!content) {
-      throw new Error("No response from OpenAI");
+      throw new Error("No response from Ollama");
     }
 
-    const parsed = JSON.parse(content);
+    let parsed: any;
+    try {
+      // Try to find JSON object in the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        // If no JSON found, treat entire response as message
+        parsed = { message: content };
+      }
+    } catch (parseError) {
+      // If JSON parsing fails, use the content as message
+      console.warn("Failed to parse JSON response, using raw content:", parseError);
+      parsed = { message: content };
+    }
     
     return {
       message: parsed.message || parsed.response || content,
@@ -84,8 +154,8 @@ Please respond in JSON format with the following structure:
         "Property tax implications?"
       ]
     };
-  } catch (error) {
-    console.error("OpenAI API error:", error);
+  } catch (error: any) {
+    console.error("Ollama API error:", error);
     
     // Enhanced fallback response
     const fallbackResponses = {
@@ -119,9 +189,11 @@ Please respond in JSON format with the following structure:
 }
 
 export async function analyzePakistaniPropertyMarket(propertyData: any): Promise<any> {
-  // Check if OpenAI client is available
-  if (!openai) {
-    console.warn("OpenAI client not available for property analysis. Using fallback analysis.");
+  // Check if Ollama is available
+  const isAvailable = await checkOllamaAvailability();
+  
+  if (!isAvailable) {
+    console.warn("Ollama not available for property analysis. Using fallback analysis.");
     return {
       investment_score: 75,
       market_outlook: "stable",
@@ -143,17 +215,37 @@ export async function analyzePakistaniPropertyMarket(propertyData: any): Promise
       "recommendation": "buy|hold|avoid"
     }
     
+    IMPORTANT: Respond ONLY with valid JSON. Do not include any text before or after the JSON.
+    
     Property data: ${JSON.stringify(propertyData)}`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const response = await ollama.chat.completions.create({
+      model: OLLAMA_MODEL,
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
       temperature: 0.3,
+      max_tokens: 400,
     });
 
-    const content = response.choices[0].message.content;
-    return content ? JSON.parse(content) : null;
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response from Ollama");
+    }
+
+    // Try to extract JSON from the response
+    let parsed: any;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("No JSON found in response");
+      }
+    } catch (parseError) {
+      console.warn("Failed to parse JSON response:", parseError);
+      throw parseError;
+    }
+
+    return parsed;
   } catch (error) {
     console.error("Property analysis error:", error);
     // Return fallback analysis

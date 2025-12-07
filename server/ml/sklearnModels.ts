@@ -344,11 +344,28 @@ def load_features(features_path):
 def encode_features(request, encoders):
     """Encode categorical features using loaded encoders with enhanced validation"""
     try:
-        # Validate input request
-        required_fields = ['propertyType', 'location', 'city', 'areaMarla', 'bedrooms', 'bathrooms', 'yearBuilt']
-        for field in required_fields:
+        # Validate input request and provide defaults
+        required_fields = {
+            'propertyType': 'House',
+            'location': 'Unknown',
+            'city': 'Karachi',
+            'areaMarla': 10,
+            'bedrooms': 3,
+            'bathrooms': 2,
+            'yearBuilt': 2020
+        }
+        
+        # Fill in missing fields with defaults
+        for field, default_value in required_fields.items():
             if field not in request:
-                print(f"Warning: Missing required field '{field}' in request", file=sys.stderr)
+                print(f"Warning: Missing required field '{field}' in request, using default: {default_value}", file=sys.stderr)
+                request[field] = default_value
+        
+        # Ensure numeric fields are numbers
+        request['areaMarla'] = float(request.get('areaMarla', 10))
+        request['bedrooms'] = int(request.get('bedrooms', 3))
+        request['bathrooms'] = int(request.get('bathrooms', 2))
+        request['yearBuilt'] = int(request.get('yearBuilt', 2020))
         
         # Default encodings for unknown values
         default_encodings = {
@@ -362,16 +379,22 @@ def encode_features(request, encoders):
         
         # Property type encoding
         property_type_map = encoders.get('property_type_encoder', {})
-        property_type_encoded = property_type_map.get(request['propertyType'], 0)
+        if not isinstance(property_type_map, dict):
+            property_type_map = {}
+        property_type_encoded = property_type_map.get(request.get('propertyType', 'House'), 0)
         
         # Location encoding (try neighbourhood first, then location)
         location_map = encoders.get('location_encoder', {})
-        location_encoded = location_map.get(request['neighbourhood'], 
-                                          location_map.get(request['location'], 0))
+        if not isinstance(location_map, dict):
+            location_map = {}
+        location_encoded = location_map.get(request.get('neighbourhood', ''), 
+                                          location_map.get(request.get('location', 'Unknown'), 0))
         
         # City encoding
         city_map = encoders.get('city_encoder', {})
-        city_encoded = city_map.get(request['city'], 0)
+        if not isinstance(city_map, dict):
+            city_map = {}
+        city_encoded = city_map.get(request.get('city', 'Karachi'), 0)
         
         # Province encoding
         province_map = encoders.get('province_encoder', {})
@@ -398,7 +421,9 @@ def encode_features(request, encoders):
         # Location premium (based on known premium areas)
         premium_areas = ['DHA', 'Bahria', 'Gulberg', 'Clifton', 'Defence', 'Cantonment']
         location_premium = 0
-        if any(area in request['neighbourhood'].lower() or area in request['location'].lower() 
+        neighbourhood = str(request.get('neighbourhood', '')).lower()
+        location = str(request.get('location', '')).lower()
+        if any(area.lower() in neighbourhood or area.lower() in location 
                for area in premium_areas):
             location_premium = 1
         
@@ -411,18 +436,23 @@ def encode_features(request, encoders):
             'Rawalpindi': (33.5651, 73.0169)
         }
         
-        coords = city_coords.get(request['city'], city_coords['Karachi'])
+        city = request.get('city', 'Karachi')
+        coords = city_coords.get(city, city_coords['Karachi'])
         latitude, longitude = coords
         
         # Property age
         current_year = 2024
-        property_age = max(0, current_year - request['yearBuilt'])
+        year_built = int(request.get('yearBuilt', 2020))
+        property_age = max(0, current_year - year_built)
         
         # Bath to bedroom ratio
-        bath_bedroom_ratio = request['bathrooms'] / request['bedrooms'] if request['bedrooms'] > 0 else 0
+        bedrooms = int(request.get('bedrooms', 3))
+        bathrooms = int(request.get('bathrooms', 2))
+        bath_bedroom_ratio = bathrooms / bedrooms if bedrooms > 0 else 0
         
         # Area size normalized
-        area_size_normalized = min(request['areaMarla'] / 50, 1)
+        area_marla = float(request.get('areaMarla', 10))
+        area_size_normalized = min(area_marla / 50, 1)
         
         # Construct feature vector in the same order as training
         features = [
@@ -434,9 +464,9 @@ def encode_features(request, encoders):
             area_category_encoded,
             latitude,
             longitude,
-            request['bathrooms'],
-            request['bedrooms'],
-            request['areaMarla'],
+            bathrooms,
+            bedrooms,
+            area_marla,
             0,  # price_per_unit (will be predicted)
             location_premium,
             property_age,
@@ -472,14 +502,20 @@ def main():
         
         encoders = load_encoders(encoder_path)
         if not encoders:
-            print(json.dumps({"error": "Failed to load encoders"}), file=sys.stderr)
-            sys.exit(1)
+            print("Warning: No encoders loaded, using default encodings", file=sys.stderr)
+            encoders = {}
         
-        # Validate encoder structure
+        # Validate encoder structure - make sure they're dictionaries
         required_encoders = ['property_type_encoder', 'location_encoder', 'city_encoder']
+        for enc_name in required_encoders:
+            if enc_name in encoders and not isinstance(encoders[enc_name], dict):
+                # If it's not a dict, try to convert or use empty dict
+                print(f"Warning: Encoder '{enc_name}' is not a dictionary, using defaults", file=sys.stderr)
+                encoders[enc_name] = {}
+        
         missing_encoders = [enc for enc in required_encoders if enc not in encoders]
         if missing_encoders:
-            print(f"Warning: Missing encoders: {missing_encoders}", file=sys.stderr)
+            print(f"Warning: Missing encoders: {missing_encoders}, will use default values", file=sys.stderr)
         
         # Encode features
         features = encode_features(request, encoders)

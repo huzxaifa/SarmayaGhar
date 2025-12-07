@@ -1,11 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { insertPropertySchema, insertValuationSchema, insertPortfolioPropertySchema, insertChatMessageSchema } from "@shared/schema";
-import { calculatePropertyValuation, predictMarketTrends, calculateROI, type PropertyValuationInput } from "./services/mlModels";
-import { getChatResponse, analyzePakistaniPropertyMarket } from "./services/openai";
-import { mlService, type PropertyValuationRequest } from "./ml/trainingService";
-import { historicalAnalyzer } from "./ml/historicalAnalyzer";
+import { storage } from "./storage.js";
+import { insertPropertySchema, insertPortfolioPropertySchema } from "@shared/schema";
+import { calculatePropertyValuation, predictMarketTrends, calculateROI, type PropertyValuationInput } from "./services/mlModels.js";
+import { getChatResponse } from "./services/openai.js";
+import { mlService, type PropertyValuationRequest } from "./ml/trainingService.js";
+import { historicalAnalyzer } from "./ml/historicalAnalyzer.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Properties routes
@@ -110,7 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ML Training and Model Management routes
-  app.post("/api/ml/train-models", async (req, res) => {
+  app.post("/api/ml/train-models", async (_req, res) => {
     try {
       // Use the new selective training method
       const result = await mlService.trainMissingModels();
@@ -122,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get list of trained/untrained models
-  app.get("/api/ml/model-status", async (req, res) => {
+  app.get("/api/ml/model-status", async (_req, res) => {
     try {
       const trainedModels = mlService.getTrainedModels();
       const untrainedModels = mlService.getUntrainedModels();
@@ -141,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/ml/training-status", async (req, res) => {
+  app.get("/api/ml/training-status", async (_req, res) => {
     try {
       const status = mlService.getTrainingStatus();
       res.json(status);
@@ -276,7 +276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Portfolio routes
-  app.get("/api/portfolio", async (req, res) => {
+  app.get("/api/portfolio", async (_req, res) => {
     try {
       const portfolioProperties = await storage.getPortfolioProperties();
       
@@ -373,7 +373,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const propertyType = (property_type as string) || "House";
       
       // Get historical data for the city
-      const growthRates = historicalAnalyzer.getGrowthRates(selectedCity, "", propertyType);
+      // Get historical data for the city (stored but not used in this context)
+      historicalAnalyzer.getGrowthRates(selectedCity, "", propertyType);
       
       // Generate realistic ROI heatmap data based on actual calculations
       const generateAreaData = async (areaName: string, lat: number, lng: number, basePrice: number) => {
@@ -383,12 +384,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             city: selectedCity,
             location: areaName,
             propertyType: propertyType,
-            area: 10, // 10 marla standard
-            areaUnit: "marla",
+            areaMarla: 10, // 10 marla standard
             bedrooms: 4,
             bathrooms: 3,
-            features: [],
-            predictionTimeline: "current"
+            yearBuilt: 2020 // Default year for heatmap calculations
           };
 
           // Get AI property price prediction
@@ -623,7 +622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Market insights route
-  app.get("/api/market-insights", async (req, res) => {
+  app.get("/api/market-insights", async (_req, res) => {
     try {
       const insights = {
         topAreas: [
@@ -650,7 +649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Basic ROI Analysis routes (without Python service)
-  app.get("/api/roi/cities", async (req, res) => {
+  app.get("/api/roi/cities", async (_req, res) => {
     res.json({
       cities: [
         "Islamabad",
@@ -662,7 +661,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/api/roi/property-types", async (req, res) => {
+  app.get("/api/roi/property-types", async (_req, res) => {
     res.json({
       property_types: [
         "House",
@@ -674,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/api/roi/market-rates", async (req, res) => {
+  app.get("/api/roi/market-rates", async (_req, res) => {
     res.json({
       "Islamabad": {
         "avg_rent_per_marla": 4500,

@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
 // Properties table
 export const properties = pgTable("properties", {
@@ -102,10 +101,10 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
 
 // Types
 export type Property = typeof properties.$inferSelect;
-export type InsertProperty = z.infer<typeof insertPropertySchema>;
+export type InsertProperty = typeof properties.$inferInsert;
 export type Valuation = typeof valuations.$inferSelect;
-export type InsertValuation = z.infer<typeof insertValuationSchema>;
+export type InsertValuation = typeof valuations.$inferInsert;
 export type PortfolioProperty = typeof portfolioProperties.$inferSelect;
-export type InsertPortfolioProperty = z.infer<typeof insertPortfolioPropertySchema>;
+export type InsertPortfolioProperty = typeof portfolioProperties.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
-export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type InsertChatMessage = typeof chatMessages.$inferInsert;

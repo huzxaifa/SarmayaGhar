@@ -1,6 +1,6 @@
-import { PropertyDataProcessor } from './dataProcessor';
-import { MLModelTrainer, type TrainedModel, type ModelResult } from './models';
-import { sklearnModelManager, type PredictionRequest, type PredictionResponse } from './sklearnModels';
+import { PropertyDataProcessor } from './dataProcessor.js';
+import { MLModelTrainer, type TrainedModel, type ModelResult } from './models.js';
+import { sklearnModelManager, type PredictionRequest } from './sklearnModels.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as tf from '@tensorflow/tfjs';

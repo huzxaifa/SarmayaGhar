@@ -1,4 +1,4 @@
-import { type InsertValuation } from "@shared/schema";
+// import { type InsertValuation } from "@shared/schema";
 
 export interface PropertyValuationInput {
   city: string;
@@ -130,7 +130,7 @@ export async function calculatePropertyValuation(input: PropertyValuationInput):
   };
 }
 
-export async function predictMarketTrends(city: string, propertyType: string): Promise<any> {
+export async function predictMarketTrends(city: string, _propertyType: string): Promise<any> {
   // Simulate market trend prediction
   const trends = {
     Karachi: { growth: 12, volatility: "Medium", outlook: "Positive" },

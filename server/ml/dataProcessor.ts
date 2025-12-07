@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import Papa from 'papaparse';
-import * as path from 'path';
 
 export interface PropertyData {
   property_id: string;
@@ -246,7 +245,7 @@ export class PropertyDataProcessor {
     });
 
     // Apply z-score normalization
-    features.forEach((feature, idx) => {
+    features.forEach((feature) => {
       const scaledFeature = featureNames.map(name => {
         const value = feature[name] as number;
         const params = scalingParams[name];

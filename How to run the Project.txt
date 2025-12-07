@@ -1,2 +1,2 @@
 Go to root folder
-Run: $env:NODE_ENV='production'; node .\dist\index.js
+Run: $env:NODE_ENV='production'; node .\dist\server\index.js

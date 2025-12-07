@@ -66,7 +66,7 @@ export default function ChatBot() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">SarmayaGhar AI Assistant</h3>
-                  <p className="text-sm opacity-90">Powered by OpenAI - Real Estate Investment Expert</p>
+                  <p className="text-sm opacity-90">Powered by Llama 3.1 - Real Estate Investment Expert</p>
                 </div>
               </CardTitle>
             </CardHeader>

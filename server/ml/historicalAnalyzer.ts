@@ -7,6 +7,7 @@ export interface GrowthRateData {
   years_analyzed: number;
   data_points: number;
   confidence: number;
+  method?: string;
   avg_price_2018?: number;
   avg_price_2019?: number;
   avg_rent_2018?: number;

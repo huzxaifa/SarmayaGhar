@@ -338,7 +338,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-bold text-primary mb-4">AI Investment Advisor</h3>
                 <p className="text-muted-foreground mb-4">
-                  Get personalized investment advice and market insights through our intelligent chatbot powered by OpenAI.
+                  Get personalized investment advice and market insights through our intelligent chatbot powered by Llama 3.1.
                 </p>
                 <ul className="text-sm text-muted-foreground space-y-2">
                   <li>• 24/7 availability</li>
