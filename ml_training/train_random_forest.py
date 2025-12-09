@@ -16,7 +16,7 @@ print("=" * 60)
 
 # Load dataset
 print("\n1. Loading dataset...")
-data = pd.read_csv("attached_assets/zameen-updated_1757269388792.csv")
+data = pd.read_csv("attached_assets/zameen-updated.csv")
 print(f"   Loaded {len(data)} records")
 
 data = data[data['purpose'] == 'For Sale'].copy()

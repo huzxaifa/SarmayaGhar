@@ -23,7 +23,7 @@ The server follows an Express.js architecture with TypeScript, implementing REST
 - **API Design**: Centralized route registration with middleware for logging and error handling
 - **Data Layer**: Uses in-memory storage (MemStorage) as the primary data store with interfaces designed for easy database migration
 - **ML Integration**: Simulates machine learning models for property valuation, market predictions, and ROI calculations
-- **AI Services**: Integrates OpenAI GPT-5 for chatbot functionality and market analysis
+- **AI Services**: Integrates Qwen3 for chatbot functionality and market analysis
 
 ## Database Design
 Currently uses in-memory storage with a schema defined for PostgreSQL migration:
@@ -63,7 +63,7 @@ The application features a comprehensive machine learning training pipeline for 
 - `trainingService.ts`: Training orchestration, model management, and prediction
 
 **Dataset:**
-- Source: `attached_assets/zameen-updated_1757269388792.csv` (48MB, 168K+ records)
+- Source: `attached_assets/zameen-updated.csv` (48MB, 168K+ records)
 - Features: 16 engineered features including location encoding, price per unit, property age, etc.
 - Preprocessing: Outlier removal, feature scaling (z-score normalization), label encoding
 
@@ -106,7 +106,7 @@ The application features a comprehensive machine learning training pipeline for 
 5. Returns price, confidence score, range, insights, and market trends
 
 ### Other AI Services
-- **OpenAI API**: GPT-5 integration for chatbot functionality and market analysis
+
 - **TensorFlow.js**: Browser/Node.js ML framework for model training and inference
 - **Chart.js**: Client-side data visualization for property analytics
 

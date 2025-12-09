@@ -65,7 +65,7 @@ The models can be triggered programmatically from within the application code.
 ## Expected Output
 
 ```
-Loading dataset from: attached_assets/zameen-updated_1757269388792.csv
+Loading dataset from: attached_assets/zameen-updated.csv
 Loaded 168543 valid property records
 After outlier removal: 156234 records
 Created encodings: 1234 locations, 8 property types, 56 cities

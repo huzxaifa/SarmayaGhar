@@ -25,7 +25,7 @@ print("=" * 80)
 
 # Load and prepare data
 print("\n1. Loading and preparing dataset...")
-data = pd.read_csv("attached_assets/zameen-updated_1757269388792.csv")
+data = pd.read_csv("attached_assets/zameen-updated.csv")
 print(f"   Loaded {len(data)} records")
 
 # Filter and clean data

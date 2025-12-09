@@ -143,7 +143,7 @@ export class MemStorage implements IStorage {
     }
 
     let properties = Array.from(this.properties.values());
-    
+
     if (filters) {
       properties = properties.filter(property => {
         return Object.entries(filters).every(([key, value]) => {
@@ -152,7 +152,7 @@ export class MemStorage implements IStorage {
         });
       });
     }
-    
+
     return properties;
   }
 
@@ -186,7 +186,7 @@ export class MemStorage implements IStorage {
   async updateProperty(id: string, property: Partial<Property>): Promise<Property | undefined> {
     const existing = this.properties.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...property, updatedAt: new Date() };
     this.properties.set(id, updated);
     return updated;
@@ -248,7 +248,7 @@ export class MemStorage implements IStorage {
   async updatePortfolioProperty(id: string, portfolioProperty: Partial<PortfolioProperty>): Promise<PortfolioProperty | undefined> {
     const existing = this.portfolioProperties.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...portfolioProperty, updatedAt: new Date() };
     this.portfolioProperties.set(id, updated);
     return updated;
@@ -499,7 +499,7 @@ declare module "./storage" { interface MemStorage { loadDatasetFromCsv(): Promis
 
 MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this: MemStorage): Promise<void> {
   if (this.datasetLoaded) return;
-  const csvPath = path.join(process.cwd(), "attached_assets", "zameen-updated_1757269388792.csv");
+  const csvPath = path.join(process.cwd(), "attached_assets", "zameen-updated.csv");
 
   if (!fs.existsSync(csvPath)) {
     this.datasetLoaded = true; // avoid repeated attempts
@@ -511,7 +511,7 @@ MemStorage.prototype.loadDatasetFromCsv = async function loadDatasetFromCsv(this
   await new Promise<void>((resolve, reject) => {
     let idx = 0;
     let loadedCount = 0;
-    
+
     Papa.parse<CsvRow>(fileStream, {
       header: true,
       dynamicTyping: true,
@@ -551,7 +551,7 @@ MemStorage.prototype.mapCsvRowToProperty = function mapCsvRowToProperty(this: Me
   const areaType = pick<string>(row, ["Area Type", "area_type", "area_unit"], "Marla");
   const price = toNumberSafe(pick(row, ["price", "total_price", "Price"], 0));
   const purpose = pick<string>(row, ["purpose", "Purpose"], "For Sale");
-  
+
   // Skip invalid rows
   if (!city || !area || !propertyType || price <= 0 || areaSize <= 0) return null;
 

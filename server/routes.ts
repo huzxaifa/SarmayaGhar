@@ -127,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trainedModels = mlService.getTrainedModels();
       const untrainedModels = mlService.getUntrainedModels();
       const status = mlService.getTrainingStatus();
-      
+
       res.json({
         trainedModels,
         untrainedModels,
@@ -155,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ml/property-valuation", async (req, res) => {
     try {
       const request: PropertyValuationRequest = req.body;
-      
+
       // Validate required fields
       if (!request.location || !request.propertyType || !request.areaMarla) {
         return res.status(400).json({ message: "Missing required fields: location, propertyType, areaMarla" });
@@ -168,14 +168,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if model is trained
       const status = mlService.getTrainingStatus();
       if (!status.hasModel) {
-        return res.status(503).json({ 
+        return res.status(503).json({
           message: "ML models not trained yet. Please train the models first.",
           shouldTrain: true
         });
       }
 
       const result = await mlService.predictPrice(request);
-      
+
       // Store valuation in database
       const valuationData = {
         city: request.city || "Karachi",
@@ -199,14 +199,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         insights: result.insights,
         predictionTimeline: JSON.stringify(result.predictions),
       };
-      
+
       await storage.createValuation(valuationData);
-      
+
       res.json(result);
     } catch (error) {
       const err = error as any;
       console.error("Error calculating ML valuation:", err && (err.stack || err.message || err));
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to calculate property valuation",
         detail: err && (err.message || String(err))
       });
@@ -217,14 +217,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ml/property-valuation-legacy", async (req, res) => {
     try {
       const input: PropertyValuationInput = req.body;
-      
+
       // Validate required fields
       if (!input.city || !input.propertyType || !input.areaSize) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
       const result = await calculatePropertyValuation(input);
-      
+
       // Store valuation in database
       const valuationData = {
         city: input.city,
@@ -243,9 +243,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         insights: result.insights,
         predictionTimeline: input.predictionTimeline,
       };
-      
+
       await storage.createValuation(valuationData);
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error calculating valuation:", error);
@@ -279,7 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/portfolio", async (_req, res) => {
     try {
       const portfolioProperties = await storage.getPortfolioProperties();
-      
+
       // Calculate portfolio summary
       const totalValue = portfolioProperties.reduce((sum, prop) => sum + parseFloat(prop.currentValue), 0);
       const totalPurchasePrice = portfolioProperties.reduce((sum, prop) => sum + parseFloat(prop.purchasePrice), 0);
@@ -320,20 +320,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ml/chatbot", async (req, res) => {
     try {
       const { message, context } = req.body;
-      
+
       if (!message) {
         return res.status(400).json({ message: "Message is required" });
       }
 
       const response = await getChatResponse(message, context);
-      
+
       // Store chat message
       await storage.createChatMessage({
         message,
         response: response.message,
         context,
       });
-      
+
       res.json(response);
     } catch (error) {
       console.error("Error processing chat message:", error);
@@ -344,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/ml/heatmap-data", async (req, res) => {
     try {
       const { city } = req.query;
-      
+
       // Generate mock heatmap data for the specified city
       const heatmapData = {
         city: city || "Karachi",
@@ -357,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ],
         lastUpdated: new Date().toISOString(),
       };
-      
+
       res.json(heatmapData);
     } catch (error) {
       console.error("Error fetching heatmap data:", error);
@@ -371,11 +371,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { city, property_type } = req.query;
       const selectedCity = (city as string) || "Karachi";
       const propertyType = (property_type as string) || "House";
-      
+
       // Get historical data for the city
       // Get historical data for the city (stored but not used in this context)
       historicalAnalyzer.getGrowthRates(selectedCity, "", propertyType);
-      
+
       // Generate realistic ROI heatmap data based on actual calculations
       const generateAreaData = async (areaName: string, lat: number, lng: number, basePrice: number) => {
         try {
@@ -393,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get AI property price prediction
           const priceResponse = await mlService.predictPrice(valuationRequest);
           const propertyPrice = priceResponse.predictedPrice;
-          
+
           // If ML prediction fails, use base price as fallback
           if (!propertyPrice || propertyPrice <= 0) {
             console.warn(`ML prediction failed for ${areaName}, using base price: ${basePrice}`);
@@ -402,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const annualRent = monthlyRent * 12;
             const annualMaintenance = fallbackPrice * 0.0075;
             const netAnnualIncome = annualRent - annualMaintenance;
-            
+
             // Apply area-specific variations even in fallback
             const areaVariations = {
               "DHA Defence": { appreciation: 18.5, rentGrowth: 0.6 },
@@ -422,26 +422,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
               "Saddar": { appreciation: 10.5, rentGrowth: 0.2 },
               "Al Noor": { appreciation: 13.8, rentGrowth: 0.35 }
             };
-            
+
             // Find matching area variation
-            const matchingVariation = Object.keys(areaVariations).find(key => 
+            const matchingVariation = Object.keys(areaVariations).find(key =>
               areaName.toLowerCase().includes(key.toLowerCase())
             );
-            
+
             let propertyAppreciationRate = 15.6578;
             let rentGrowthRate = 0.4897;
             let confidence = 0.5;
-            
+
             if (matchingVariation) {
               propertyAppreciationRate = areaVariations[matchingVariation as keyof typeof areaVariations].appreciation;
               rentGrowthRate = areaVariations[matchingVariation as keyof typeof areaVariations].rentGrowth;
               confidence = 0.7;
             }
-            
+
             const propertyAppreciation = fallbackPrice * (propertyAppreciationRate / 100);
             const totalAnnualReturn = netAnnualIncome + propertyAppreciation;
             const annualROI = (totalAnnualReturn / fallbackPrice) * 100;
-            
+
             return {
               name: areaName,
               lat: lat,
@@ -456,29 +456,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
               usingHistoricalData: false
             };
           }
-          
+
           // Calculate monthly rent using the formula: propertyPrice / 100
           const monthlyRent = propertyPrice / 100;
           const annualRent = monthlyRent * 12;
-          
+
           // Calculate maintenance costs (0.75% of property value annually)
           const annualMaintenance = propertyPrice * 0.0075;
           const netAnnualIncome = annualRent - annualMaintenance;
-          
+
           // Get historical growth rates for this specific location
           const locationGrowthRates = historicalAnalyzer.getGrowthRates(selectedCity, areaName, propertyType);
-          
+
           let propertyAppreciationRate = 15.6578; // Default fallback
           let rentGrowthRate = 0.4897; // Default fallback
           let confidence = 0.5;
           let usingHistoricalData = false;
           let dataPoints = 0;
-          
+
           if (locationGrowthRates) {
             // Check if historical data is suitable for investment analysis
             if (locationGrowthRates.property_appreciation_rate >= -20 &&
-                locationGrowthRates.rent_growth_rate >= -10 &&
-                locationGrowthRates.confidence > 0.6) {
+              locationGrowthRates.rent_growth_rate >= -10 &&
+              locationGrowthRates.confidence > 0.6) {
               propertyAppreciationRate = locationGrowthRates.property_appreciation_rate;
               rentGrowthRate = locationGrowthRates.rent_growth_rate;
               confidence = locationGrowthRates.confidence;
@@ -505,24 +505,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
               "Saddar": { appreciation: 10.5, rentGrowth: 0.2 },
               "Al Noor": { appreciation: 13.8, rentGrowth: 0.35 }
             };
-            
+
             // Find matching area variation
-            const matchingVariation = Object.keys(areaVariations).find(key => 
+            const matchingVariation = Object.keys(areaVariations).find(key =>
               areaName.toLowerCase().includes(key.toLowerCase())
             );
-            
+
             if (matchingVariation) {
               propertyAppreciationRate = areaVariations[matchingVariation as keyof typeof areaVariations].appreciation;
               rentGrowthRate = areaVariations[matchingVariation as keyof typeof areaVariations].rentGrowth;
               confidence = 0.7; // Higher confidence for area-based estimates
             }
           }
-          
+
           // Calculate ROI: (Net Annual Income + Property Appreciation) / Property Price * 100
           const propertyAppreciation = propertyPrice * (propertyAppreciationRate / 100);
           const totalAnnualReturn = netAnnualIncome + propertyAppreciation;
           const annualROI = (totalAnnualReturn / propertyPrice) * 100;
-          
+
           return {
             name: areaName,
             lat: lat,
@@ -546,7 +546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const propertyAppreciation = basePrice * 0.156578;
           const totalAnnualReturn = netAnnualIncome + propertyAppreciation;
           const annualROI = (totalAnnualReturn / basePrice) * 100;
-          
+
           return {
             name: areaName,
             lat: lat,
@@ -600,20 +600,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { name: "Model Town", lat: 31.4504, lng: 73.1350, basePrice: 2200000 },
         ],
       };
-      
+
       const cityAreas = areaDefinitions[selectedCity as keyof typeof areaDefinitions] || areaDefinitions["Karachi"];
-      
+
       // Generate data for all areas in parallel
       const areas = await Promise.all(
         cityAreas.map(area => generateAreaData(area.name, area.lat, area.lng, area.basePrice))
       );
-      
+
       const heatmapData = {
         city: selectedCity,
         areas: areas,
         lastUpdated: new Date().toISOString(),
       };
-      
+
       res.json(heatmapData);
     } catch (error) {
       console.error("Error fetching ROI heatmap data:", error);
@@ -640,7 +640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           values: [65, 68, 72, 70, 75, 78],
         }
       };
-      
+
       res.json(insights);
     } catch (error) {
       console.error("Error fetching market insights:", error);
@@ -653,7 +653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({
       cities: [
         "Islamabad",
-        "Karachi", 
+        "Karachi",
         "Lahore",
         "Rawalpindi",
         "Faisalabad"
@@ -706,7 +706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/roi/analyze", async (req, res) => {
     try {
       const { property_data } = req.body;
-      
+
       if (!property_data) {
         return res.status(400).json({ message: "Property data is required" });
       }
@@ -733,42 +733,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const propertyPrice = propertyPriceResponse.predictedPrice;
-      
-      // For now, use your formula for rent prediction (1% of property value)
-      // TODO: Implement dedicated rental prediction model
-      const monthlyRent = propertyPrice / 100;
+
+      // Use 5% annual rental yield as per market standards (matching n/predict.py)
+      const annualYield = 0.05;
+      const monthlyRent = (propertyPrice * annualYield) / 12;
 
       // Use AI predictions for calculations
       const property_value = propertyPrice;
       const monthly_rent = monthlyRent;
       const annual_rent = monthly_rent * 12;
-      
+
       // Calculate maintenance costs (typically 0.5-1% of property value annually)
       const annual_maintenance = property_value * 0.0075; // 0.75% of property value
       const net_annual_income = annual_rent - annual_maintenance;
-      
+
       // Get historical growth rates for this location and property type
       const growthRates = historicalAnalyzer.getGrowthRates(city, location, property_type);
-      
+
       // Use historical data if available and positive, otherwise fallback to default rates
       let property_appreciation_rate = 15.6578; // Default fallback
       let rent_growth_rate = 0.4897; // Default fallback - 0.4897% of property price
       let data_confidence = 0.5; // Default confidence
       let using_fallback = true;
       let fallback_reason = "no_historical_data";
-      
+
       if (growthRates) {
         // Check if historical data is reasonable for investment analysis
         const historical_appreciation = growthRates.property_appreciation_rate;
         const historical_rent_growth = growthRates.rent_growth_rate;
-        
+
         // Use historical data only if:
         // 1. Property appreciation is not severely negative (< -20%)
         // 2. Rent growth is not severely negative (< -10%)
         // 3. Data has reasonable confidence (> 0.6)
-        if (historical_appreciation >= -20 && 
-            historical_rent_growth >= -10 && 
-            growthRates.confidence > 0.6) {
+        if (historical_appreciation >= -20 &&
+          historical_rent_growth >= -10 &&
+          growthRates.confidence > 0.6) {
           property_appreciation_rate = historical_appreciation;
           rent_growth_rate = historical_rent_growth;
           data_confidence = growthRates.confidence;
@@ -785,17 +785,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // ROI = (Rent + Property Appreciation) / Property Price
       // Use actual historical appreciation rate
       const property_appreciation = property_value * (property_appreciation_rate / 100);
       const total_annual_return = net_annual_income + property_appreciation;
       const annual_roi = (total_annual_return / property_value) * 100;
       const cap_rate = (annual_rent / property_value) * 100;
-      
+
       // Calculate price per marla
       const price_per_marla = property_value / area_marla;
-      
+
       // Calculate investment grade
       let grade = "D";
       if (annual_roi >= 12 && cap_rate >= 8) grade = "A+";
@@ -814,10 +814,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           fallback_info: {
             using_fallback: using_fallback,
             fallback_reason: fallback_reason,
-          fallback_rates: {
-            property_appreciation_rate: 15.6578,
-            rent_growth_rate: 0.4897
-          }
+            fallback_rates: {
+              property_appreciation_rate: 15.6578,
+              rent_growth_rate: 0.4897
+            }
           },
           historical_data: growthRates ? {
             property_appreciation_rate: growthRates.property_appreciation_rate,
@@ -877,7 +877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           price_per_marla: price_per_marla,
           market_yield: (monthly_rent * 12 / property_value) * 100,
           market_trend: using_fallback ? "Fallback Formula" : "Historical Data",
-          recommendation: using_fallback 
+          recommendation: using_fallback
             ? `Using fallback formula (${fallback_reason}): ${property_type} in ${location}, ${city} projected with 15.66% annual appreciation and 0.49% rent growth, generating ${annual_roi.toFixed(1)}% annual ROI with PKR ${price_per_marla.toLocaleString()} per marla.`
             : `Based on ${growthRates?.years_analyzed} years of historical data (${growthRates?.data_points} data points), ${property_type} in ${location}, ${city} shows ${property_appreciation_rate.toFixed(1)}% annual appreciation and ${rent_growth_rate.toFixed(1)}% rent growth, generating ${annual_roi.toFixed(1)}% annual ROI with PKR ${price_per_marla.toLocaleString()} per marla.`
         }

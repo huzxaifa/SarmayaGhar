@@ -19,7 +19,7 @@ def detect_bias():
     print("Running Quick Bias Detection...")
     
     # Load data
-    data = pd.read_csv("attached_assets/zameen-updated_1757269388792.csv")
+    data = pd.read_csv("attached_assets/zameen-updated.csv")
     data = data[data['purpose'] == 'For Sale'].copy()
     data = data.dropna(subset=['price', 'location', 'property_type', 'city', 'Area Size'])
     

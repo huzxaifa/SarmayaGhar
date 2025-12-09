@@ -2,6 +2,7 @@
 import pickle
 import json
 import sys
+import os
 import numpy as np
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -244,6 +245,20 @@ def main():
         if features is None:
             print(json.dumps({"error": "Failed to encode features"}), file=sys.stderr)
             sys.exit(1)
+            
+        # Try to load scaler if it exists (Critical for Deep Learning models)
+        try:
+            scaler_path = os.path.join(os.path.dirname(model_path), 'scaler.pkl')
+            if os.path.exists(scaler_path):
+                print(f"Loading scaler from {scaler_path}...", file=sys.stderr)
+                with open(scaler_path, 'rb') as f:
+                    scaler = pickle.load(f)
+                features = scaler.transform(features)
+                print("Features scaled successfully.", file=sys.stderr)
+        except Exception as e:
+            # If scaler fails or doesn't exist, we proceed with raw features 
+            # (Works for trees, bad for MLP trained on scaled data, but best effort)
+            print(f"Warning: Could not load/apply scaler: {e}", file=sys.stderr)
         
         # Make prediction
         prediction = model.predict(features)[0]

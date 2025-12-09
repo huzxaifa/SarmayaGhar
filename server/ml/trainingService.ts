@@ -111,8 +111,8 @@ export class MLTrainingService {
 
     try {
       // Load and preprocess data
-      const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated_1757269388792.csv');
-      
+      const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated.csv');
+
       if (!fs.existsSync(csvPath)) {
         throw new Error('Dataset file not found. Please upload the CSV file.');
       }
@@ -171,7 +171,7 @@ export class MLTrainingService {
     }
     const allModels = [
       'Linear Regression',
-      'Decision Tree', 
+      'Decision Tree',
       'Random Forest',
       'Gradient Boosting',
       'XGBoost',
@@ -218,7 +218,7 @@ export class MLTrainingService {
             const stat = fs.statSync(weightsPath);
             // consider weights present if size > 1KB
             if (stat.size > 1024) hasArtifacts = true;
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (!hasArtifacts) {
@@ -232,7 +232,7 @@ export class MLTrainingService {
                 break;
               }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (hasArtifacts) {
@@ -279,11 +279,11 @@ export class MLTrainingService {
     }
 
     const untrainedModels = this.getUntrainedModels();
-    
+
     if (untrainedModels.length === 0) {
       const trainedModels = this.getTrainedModels().filter(m => m.trained);
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: 'All models are already trained!',
         trainedModels: trainedModels
       };
@@ -294,8 +294,8 @@ export class MLTrainingService {
 
     try {
       // Load and preprocess data
-      const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated_1757269388792.csv');
-      
+      const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated.csv');
+
       if (!fs.existsSync(csvPath)) {
         throw new Error('Dataset file not found. Please upload the CSV file.');
       }
@@ -310,9 +310,9 @@ export class MLTrainingService {
       // Train only missing models
       const trainer = new MLModelTrainer();
       const { results, bestModel } = await trainer.trainSelectedModels(
-        scaledFeatures, 
-        targets, 
-        scalingParams, 
+        scaledFeatures,
+        targets,
+        scalingParams,
         encodingMaps,
         untrainedModels
       );
@@ -356,7 +356,7 @@ export class MLTrainingService {
     if (sklearnModelManager.hasModels()) {
       return this.predictWithSklearn(request);
     }
-    
+
     if (!this.trainedModel) {
       throw new Error('No trained model available. Please train the model first.');
     }
@@ -366,7 +366,7 @@ export class MLTrainingService {
     if (!this.trainedModel.encodingMaps || !this.trainedModel.scalingParams) {
       try {
         // Load dataset and rebuild processor state
-        const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated_1757269388792.csv');
+        const csvPath = path.join(process.cwd(), 'attached_assets', 'zameen-updated.csv');
         if (!fs.existsSync(csvPath)) {
           throw new Error('Dataset file not found for rebuilding encodings/scaling.');
         }
@@ -392,7 +392,7 @@ export class MLTrainingService {
 
     // Convert request to features
     const features = this.convertRequestToFeatures(request);
-    
+
     // Scale features using the same parameters used during training
     const scaledFeatures = this.processor.scaleNewFeature(features, this.trainedModel.scalingParams);
 
@@ -469,7 +469,7 @@ export class MLTrainingService {
 
     const currentYear = new Date().getFullYear();
     const propertyAge = Math.max(0, currentYear - request.yearBuilt);
-    
+
     // Default coordinates for major cities (you can expand this)
     const cityCoordinates: { [key: string]: { lat: number, lng: number } } = {
       'Karachi': { lat: 24.8607, lng: 67.0011 },
@@ -494,8 +494,8 @@ export class MLTrainingService {
       bedrooms: request.bedrooms,
       area_size: request.areaMarla,
       price_per_unit: 0, // Will be calculated by prediction
-      location_premium: encodingMaps.locationPremiumMap.get(request.neighbourhood) || 
-                       encodingMaps.locationPremiumMap.get(request.location) || 0,
+      location_premium: encodingMaps.locationPremiumMap.get(request.neighbourhood) ||
+        encodingMaps.locationPremiumMap.get(request.location) || 0,
       property_age_years: propertyAge,
       bath_bedroom_ratio: request.bedrooms > 0 ? request.bathrooms / request.bedrooms : 0,
       area_size_normalized: Math.min(request.areaMarla / 50, 1)
@@ -508,14 +508,14 @@ export class MLTrainingService {
     else if (areaMarla >= 15) category = '15-20 Marla';
     else if (areaMarla >= 10) category = '10-15 Marla';
     else if (areaMarla >= 5) category = '5-10 Marla';
-    
+
     return encodingMaps.areaCategoryMap.get(category) || 0;
   }
 
   private getMarketGrowthRate(city: string, location: string): number {
     // Market growth rates based on historical data and economic indicators
     const premiumAreas = ['DHA', 'Bahria', 'Gulberg', 'Clifton', 'Defence', 'Cantonment'];
-    const isPremiumArea = premiumAreas.some(area => 
+    const isPremiumArea = premiumAreas.some(area =>
       location.toLowerCase().includes(area.toLowerCase())
     );
 
@@ -668,7 +668,7 @@ export class MLTrainingService {
   public getTrainingStatus(): { isTraining: boolean; hasModel: boolean; modelInfo?: any } {
     const hasSklearnModels = sklearnModelManager.hasModels();
     const hasTfModels = !!this.trainedModel;
-    
+
     return {
       isTraining: this.isTraining,
       hasModel: hasSklearnModels || hasTfModels,
@@ -729,7 +729,7 @@ export class MLTrainingService {
         let hasArtifacts = false;
         if (fs.existsSync(modelJsonPath) && !this.isGitLfsPointer(modelJsonPath)) hasArtifacts = true;
         if (!hasArtifacts && fs.existsSync(weightsPath) && !this.isGitLfsPointer(weightsPath)) {
-          try { if (fs.statSync(weightsPath).size > 1024) hasArtifacts = true; } catch (_) {}
+          try { if (fs.statSync(weightsPath).size > 1024) hasArtifacts = true; } catch (_) { }
         }
         if (!hasArtifacts) {
           try {
@@ -741,9 +741,9 @@ export class MLTrainingService {
                   hasArtifacts = true;
                   break;
                 }
-              } catch (_) {}
+              } catch (_) { }
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (meta || hasArtifacts) {

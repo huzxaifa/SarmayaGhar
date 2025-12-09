@@ -9,7 +9,7 @@ Your AI Property Valuation system has been successfully set up with a **comprehe
 ## ✅ Implementation Checklist - ALL COMPLETE
 
 ### 1. Data Loading & Preprocessing ✅
-- **Dataset**: `attached_assets/zameen-updated_1757269388792.csv` (48MB, 168K+ records)
+- **Dataset**: `attached_assets/zameen-updated.csv` (48MB, 168K+ records)
 - **Validation**: Filters invalid records, ensures data quality
 - **Cleaning**: Removes outliers using IQR method
 - **Missing Values**: Handles with defaults/neighborhood averages

@@ -56,10 +56,10 @@ export class SklearnModelManager {
   }
 
   private loadAvailableModels(): void {
-    const modelDirectories = ['Decision_Tree', 'Random_Forest', 'Gradient_Boosting','Linear_Regression', 'XGBoost', 'Deep_Learning'];
-    
+    const modelDirectories = ['Decision_Tree', 'Random_Forest', 'Gradient_Boosting', 'Linear_Regression', 'XGBoost', 'Deep_Learning'];
+
     this.availableModels = [];
-    
+
     for (const dir of modelDirectories) {
       const modelDir = path.join(this.trainedModelsDir, dir);
       const modelPath = path.join(modelDir, 'model.pkl');
@@ -94,8 +94,8 @@ export class SklearnModelManager {
 
     // Sort models by R² score (best first)
     this.availableModels.sort((a, b) => b.metadata.r2Score - a.metadata.r2Score);
-    
-    console.log(`Loaded ${this.availableModels.length} sklearn models:`, 
+
+    console.log(`Loaded ${this.availableModels.length} sklearn models:`,
       this.availableModels.map(m => `${m.name} (R²: ${m.metadata.r2Score.toFixed(4)})`));
   }
 
@@ -117,7 +117,7 @@ export class SklearnModelManager {
     }
 
     const bestModel = this.getBestModel()!;
-    
+
     try {
       // Try Python prediction first
       try {
@@ -142,7 +142,7 @@ export class SklearnModelManager {
         const prediction = await this.callPythonPrediction(inputData);
         const confidence = Math.max(0.7, bestModel.metadata.r2Score);
         const priceVariance = (1 - confidence) * 0.2;
-        
+
         return {
           predictedPrice: Math.round(prediction),
           priceRange: {
@@ -195,7 +195,7 @@ export class SklearnModelManager {
     const city = request.city || 'Karachi';
     const propertyType = request.propertyType;
     const basePrice = basePrices[city as keyof typeof basePrices]?.[propertyType as keyof typeof basePrices[keyof typeof basePrices]] || 3000000;
-    
+
     // Calculate estimated value
     let estimatedValue = basePrice * request.areaMarla;
 
@@ -210,11 +210,11 @@ export class SklearnModelManager {
 
     // Premium area adjustments
     const premiumAreas = ['DHA', 'Bahria', 'Gulberg', 'Clifton', 'Defence', 'Cantonment'];
-    const isPremiumArea = premiumAreas.some(area => 
+    const isPremiumArea = premiumAreas.some(area =>
       request.location.toLowerCase().includes(area.toLowerCase()) ||
       (request.neighbourhood && request.neighbourhood.toLowerCase().includes(area.toLowerCase()))
     );
-    
+
     if (isPremiumArea) {
       estimatedValue *= 1.3;
     }
@@ -244,241 +244,36 @@ export class SklearnModelManager {
 import pickle
 import json
 import sys
+import os
 import numpy as np
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.tree import DecisionTreeRegressor
+import warnings
+
 try:
     import xgboost as xgb
 except ImportError:
     pass
-import warnings
+
+try:
+    import lightgbm as lgb
+except ImportError:
+    pass
+
+# Suppress warnings
 warnings.filterwarnings('ignore')
 
-def load_encoders(encoder_path):
-    """Load encoders from pickle file with enhanced error handling"""
+def load_pkl(path):
+    """Load pickle file with robust error handling"""
     try:
-        with open(encoder_path, 'rb') as f:
-            encoders = pickle.load(f)
-        print(f"Successfully loaded encoders from {encoder_path}", file=sys.stderr)
-        return encoders
+        with open(path, 'rb') as f:
+            return pickle.load(f)
     except Exception as e:
-        print(f"Error loading encoders: {e}", file=sys.stderr)
-        # Try with different encoding
+        print(f"Error loading {path}: {e}", file=sys.stderr)
+        # Try latin1 encoding for older pickles
         try:
-            with open(encoder_path, 'rb') as f:
-                encoders = pickle.load(f, encoding='latin1')
-            print(f"Successfully loaded encoders with latin1 encoding", file=sys.stderr)
-            return encoders
-        except Exception as e2:
-            print(f"Error loading encoders with latin1 encoding: {e2}", file=sys.stderr)
-            # Try with joblib as fallback
-            try:
-                import joblib
-                encoders = joblib.load(encoder_path)
-                print(f"Successfully loaded encoders with joblib", file=sys.stderr)
-                return encoders
-            except Exception as e3:
-                print(f"Error loading encoders with joblib: {e3}", file=sys.stderr)
-                return {}
-
-def load_model(model_path):
-    """Load sklearn model from pickle file with enhanced compatibility"""
-    try:
-        with open(model_path, 'rb') as f:
-            model = pickle.load(f)
-        print(f"Successfully loaded model from {model_path}", file=sys.stderr)
-        return model
-    except Exception as e:
-        print(f"Error loading model with pickle: {e}", file=sys.stderr)
-        # Try with joblib (preferred for sklearn models)
-        try:
-            import joblib
-            model = joblib.load(model_path)
-            print(f"Successfully loaded model with joblib", file=sys.stderr)
-            return model
-        except Exception as e2:
-            print(f"Error loading model with joblib: {e2}", file=sys.stderr)
-            # Try with different encoding
-            try:
-                with open(model_path, 'rb') as f:
-                    model = pickle.load(f, encoding='latin1')
-                print(f"Successfully loaded model with latin1 encoding", file=sys.stderr)
-                return model
-            except Exception as e3:
-                print(f"Error loading model with latin1 encoding: {e3}", file=sys.stderr)
-                # Try with custom unpickler that ignores version issues
-                try:
-                    class CustomUnpickler(pickle.Unpickler):
-                        def find_class(self, module, name):
-                            # Handle version compatibility issues
-                            if module.startswith('sklearn'):
-                                # Try to import from current sklearn version
-                                try:
-                                    import importlib
-                                    mod = importlib.import_module(module)
-                                    return getattr(mod, name)
-                                except:
-                                    pass
-                            return super().find_class(module, name)
-                    
-                    with open(model_path, 'rb') as f:
-                        unpickler = CustomUnpickler(f)
-                        model = unpickler.load()
-                    print(f"Successfully loaded model with custom unpickler", file=sys.stderr)
-                    return model
-                except Exception as e4:
-                    print(f"Error loading model with custom unpickler: {e4}", file=sys.stderr)
-                    return None
-
-def load_features(features_path):
-    """Load feature names from pickle file"""
-    try:
-        with open(features_path, 'rb') as f:
-            features = pickle.load(f)
-        return features
-    except Exception as e:
-        print(f"Error loading features: {e}", file=sys.stderr)
-        return []
-
-def encode_features(request, encoders):
-    """Encode categorical features using loaded encoders with enhanced validation"""
-    try:
-        # Validate input request and provide defaults
-        required_fields = {
-            'propertyType': 'House',
-            'location': 'Unknown',
-            'city': 'Karachi',
-            'areaMarla': 10,
-            'bedrooms': 3,
-            'bathrooms': 2,
-            'yearBuilt': 2020
-        }
-        
-        # Fill in missing fields with defaults
-        for field, default_value in required_fields.items():
-            if field not in request:
-                print(f"Warning: Missing required field '{field}' in request, using default: {default_value}", file=sys.stderr)
-                request[field] = default_value
-        
-        # Ensure numeric fields are numbers
-        request['areaMarla'] = float(request.get('areaMarla', 10))
-        request['bedrooms'] = int(request.get('bedrooms', 3))
-        request['bathrooms'] = int(request.get('bathrooms', 2))
-        request['yearBuilt'] = int(request.get('yearBuilt', 2020))
-        
-        # Default encodings for unknown values
-        default_encodings = {
-            'property_type': 0,
-            'location': 0,
-            'city': 0,
-            'province': 0,
-            'purpose': 0,
-            'area_category': 0
-        }
-        
-        # Property type encoding
-        property_type_map = encoders.get('property_type_encoder', {})
-        if not isinstance(property_type_map, dict):
-            property_type_map = {}
-        property_type_encoded = property_type_map.get(request.get('propertyType', 'House'), 0)
-        
-        # Location encoding (try neighbourhood first, then location)
-        location_map = encoders.get('location_encoder', {})
-        if not isinstance(location_map, dict):
-            location_map = {}
-        location_encoded = location_map.get(request.get('neighbourhood', ''), 
-                                          location_map.get(request.get('location', 'Unknown'), 0))
-        
-        # City encoding
-        city_map = encoders.get('city_encoder', {})
-        if not isinstance(city_map, dict):
-            city_map = {}
-        city_encoded = city_map.get(request.get('city', 'Karachi'), 0)
-        
-        # Province encoding
-        province_map = encoders.get('province_encoder', {})
-        province_encoded = province_map.get(request['province'], 0)
-        
-        # Purpose encoding (default to 0 for sale)
-        purpose_encoded = 0
-        
-        # Area category encoding
-        area_marla = request['areaMarla']
-        area_category = '0-5 Marla'
-        if area_marla > 20:
-            area_category = '20+ Marla'
-        elif area_marla >= 15:
-            area_category = '15-20 Marla'
-        elif area_marla >= 10:
-            area_category = '10-15 Marla'
-        elif area_marla >= 5:
-            area_category = '5-10 Marla'
-        
-        area_category_map = encoders.get('area_category_encoder', {})
-        area_category_encoded = area_category_map.get(area_category, 0)
-        
-        # Location premium (based on known premium areas)
-        premium_areas = ['DHA', 'Bahria', 'Gulberg', 'Clifton', 'Defence', 'Cantonment']
-        location_premium = 0
-        neighbourhood = str(request.get('neighbourhood', '')).lower()
-        location = str(request.get('location', '')).lower()
-        if any(area.lower() in neighbourhood or area.lower() in location 
-               for area in premium_areas):
-            location_premium = 1
-        
-        # City coordinates (simplified)
-        city_coords = {
-            'Karachi': (24.8607, 67.0011),
-            'Lahore': (31.5204, 74.3587),
-            'Islamabad': (33.6844, 73.0479),
-            'Faisalabad': (31.4504, 73.1350),
-            'Rawalpindi': (33.5651, 73.0169)
-        }
-        
-        city = request.get('city', 'Karachi')
-        coords = city_coords.get(city, city_coords['Karachi'])
-        latitude, longitude = coords
-        
-        # Property age
-        current_year = 2024
-        year_built = int(request.get('yearBuilt', 2020))
-        property_age = max(0, current_year - year_built)
-        
-        # Bath to bedroom ratio
-        bedrooms = int(request.get('bedrooms', 3))
-        bathrooms = int(request.get('bathrooms', 2))
-        bath_bedroom_ratio = bathrooms / bedrooms if bedrooms > 0 else 0
-        
-        # Area size normalized
-        area_marla = float(request.get('areaMarla', 10))
-        area_size_normalized = min(area_marla / 50, 1)
-        
-        # Construct feature vector in the same order as training
-        features = [
-            property_type_encoded,
-            location_encoded,
-            city_encoded,
-            province_encoded,
-            purpose_encoded,
-            area_category_encoded,
-            latitude,
-            longitude,
-            bathrooms,
-            bedrooms,
-            area_marla,
-            0,  # price_per_unit (will be predicted)
-            location_premium,
-            property_age,
-            bath_bedroom_ratio,
-            area_size_normalized
-        ]
-        
-        return np.array(features).reshape(1, -1)
-        
-    except Exception as e:
-        print(f"Error encoding features: {e}", file=sys.stderr)
-        return None
+            with open(path, 'rb') as f:
+                return pickle.load(f, encoding='latin1')
+        except:
+            return None
 
 def main():
     try:
@@ -486,70 +281,124 @@ def main():
         input_data = json.loads(sys.stdin.read())
         
         model_path = input_data['modelPath']
-        encoder_path = input_data['encoderPath']
-        features_path = input_data['featuresPath']
-        request = input_data['request']
+        base_dir = os.path.dirname(model_path)
         
-        # Load model and encoders
-        model = load_model(model_path)
+        # Load Model
+        model = load_pkl(model_path)
         if model is None:
             print(json.dumps({"error": "Failed to load model"}), file=sys.stderr)
             sys.exit(1)
-        
-        # Validate model type and capabilities
-        model_type = type(model).__name__
-        print(f"Loaded model type: {model_type}", file=sys.stderr)
-        
-        encoders = load_encoders(encoder_path)
-        if not encoders:
-            print("Warning: No encoders loaded, using default encodings", file=sys.stderr)
-            encoders = {}
-        
-        # Validate encoder structure - make sure they're dictionaries
-        required_encoders = ['property_type_encoder', 'location_encoder', 'city_encoder']
-        for enc_name in required_encoders:
-            if enc_name in encoders and not isinstance(encoders[enc_name], dict):
-                # If it's not a dict, try to convert or use empty dict
-                print(f"Warning: Encoder '{enc_name}' is not a dictionary, using defaults", file=sys.stderr)
-                encoders[enc_name] = {}
-        
-        missing_encoders = [enc for enc in required_encoders if enc not in encoders]
-        if missing_encoders:
-            print(f"Warning: Missing encoders: {missing_encoders}, will use default values", file=sys.stderr)
-        
-        # Encode features
-        features = encode_features(request, encoders)
-        if features is None:
-            print(json.dumps({"error": "Failed to encode features"}), file=sys.stderr)
-            sys.exit(1)
-        
-        # Make prediction
-        prediction = model.predict(features)[0]
-        
-        # Get prediction confidence if available (for some models)
-        confidence = None
-        if hasattr(model, 'predict_proba'):
-            try:
-                # For models that support probability estimation
-                proba = model.predict_proba(features)[0]
-                confidence = float(max(proba)) if len(proba) > 0 else None
-            except:
-                pass
-        
-        # Ensure prediction is positive and reasonable
-        prediction = max(1000000, prediction)  # Minimum 1 million PKR
-        
-        # Log prediction details for debugging
-        print(f"Prediction: {prediction:.2f}, Confidence: {confidence}", file=sys.stderr)
-        
-        result = {"prediction": float(prediction)}
-        if confidence is not None:
-            result["confidence"] = confidence
             
+        # Load Artifacts
+        encoders = load_pkl(os.path.join(base_dir, 'encoders.pkl')) or {}
+        scaler = load_pkl(os.path.join(base_dir, 'scaler.pkl'))
+        target_encoder = load_pkl(os.path.join(base_dir, 'target_encoder.pkl')) or {}
+        city_median = load_pkl(os.path.join(base_dir, 'city_median.pkl')) or {}
+        feature_names = load_pkl(os.path.join(base_dir, 'features.pkl'))
+        
+        request = input_data['request']
+        
+        # --- Feature Engineering (Must match training script) ---
+        
+        # 1. Parse Inputs with Defaults
+        prop_type = request.get('propertyType', 'House')
+        location = request.get('location', 'Unknown')
+        city = request.get('city', 'Karachi')
+        province = request.get('province', 'Sindh')
+        bedrooms = int(request.get('bedrooms', 3))
+        baths = int(request.get('bathrooms', 2))
+        area_size = float(request.get('areaMarla', 5))
+        if area_size <= 0: area_size = 5
+        
+        # 2. Derived Features
+        total_rooms = bedrooms + baths
+        room_density = total_rooms / area_size if area_size > 0 else 0
+        
+        # 3. Encodings
+        # Label Encodings
+        pt_encoded = 0
+        if 'property_type' in encoders:
+            try: pt_encoded = encoders['property_type'].transform([prop_type])[0]
+            except: pt_encoded = 0 # Handle unknown
+            
+        city_encoded = 0
+        if 'city' in encoders:
+            try: city_encoded = encoders['city'].transform([city])[0]
+            except: city_encoded = 0
+            
+        prov_encoded = 0
+        if 'province_name' in encoders:
+            try: prov_encoded = encoders['province_name'].transform([province])[0]
+            except: prov_encoded = 0
+            
+        # Target Encoding (Location)
+        # Use mean of all values as fallback for unknown locations
+        default_target_val = np.mean(list(target_encoder.values())) if target_encoder else 0
+        loc_encoded = target_encoder.get(location, default_target_val)
+        
+        # City Median Price
+        default_city_val = np.mean(list(city_median.values())) if city_median else 0
+        city_med_val = city_median.get(city, default_city_val)
+        
+        # Coordinates (Simplified fallback)
+        city_coords = {
+            'Karachi': (24.8607, 67.0011),
+            'Lahore': (31.5204, 74.3587),
+            'Islamabad': (33.6844, 73.0479),
+            'Rawalpindi': (33.5651, 73.0169),
+            'Faisalabad': (31.4504, 73.1350)
+        }
+        lat, lon = city_coords.get(city, (24.8607, 67.0011))
+        
+        # 4. Construct Feature Vector
+        # Expected Order: 
+        # ['property_type_encoded', 'location_encoded', 'city_encoded', 'province_name_encoded',
+        #  'latitude', 'longitude', 'baths', 'bedrooms', 'area_size',
+        #  'total_rooms', 'room_density', 'city_median_price']
+        
+        features = np.array([
+            pt_encoded,
+            loc_encoded,
+            city_encoded,
+            prov_encoded,
+            lat,
+            lon,
+            baths,
+            bedrooms,
+            area_size,
+            total_rooms,
+            room_density,
+            city_med_val
+        ]).reshape(1, -1)
+        
+        # 5. Scaling
+        if scaler:
+            features = scaler.transform(features)
+            
+        # 6. Prediction
+        log_pred = model.predict(features)[0]
+        
+        # 7. Inverse Log Transform
+        prediction = np.expm1(log_pred)
+        
+        # Guardrails
+        prediction = max(500000, prediction) # Min 5 Lakh
+        
+        # Confidence (Mock or Proba)
+        confidence = 0.85 # Default high confidence if successful
+        
+        print(f"Prediction: {prediction:.2f}", file=sys.stderr)
+        
+        result = {
+            "prediction": float(prediction),
+            "confidence": confidence
+        }
         print(json.dumps(result))
         
     except Exception as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
@@ -583,23 +432,23 @@ if __name__ == "__main__":
             if (result.prediction !== undefined) {
               // Log additional information if available
               if (result.confidence !== undefined) {
-                console.log(`Python prediction confidence: ${result.confidence}`);
+                console.log(`Python prediction confidence: ${result.confidence} `);
               }
               resolve(result.prediction);
             } else {
               reject(new Error('No prediction in result'));
             }
           } catch (error) {
-            reject(new Error(`Failed to parse prediction result: ${error}`));
+            reject(new Error(`Failed to parse prediction result: ${error} `));
           }
         } else {
-          console.error(`Python script stderr: ${stderr}`);
-          reject(new Error(`Python script failed with code ${code}: ${stderr}`));
+          console.error(`Python script stderr: ${stderr} `);
+          reject(new Error(`Python script failed with code ${code}: ${stderr} `));
         }
       });
 
       python.on('error', (error) => {
-        reject(new Error(`Failed to spawn Python process: ${error.message}`));
+        reject(new Error(`Failed to spawn Python process: ${error.message} `));
       });
 
       // Send input data to Python script

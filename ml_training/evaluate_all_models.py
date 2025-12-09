@@ -23,7 +23,7 @@ def load_and_prepare_data():
     """Load and prepare data for evaluation"""
     print("📊 Loading and preparing data...")
     
-    data = pd.read_csv("attached_assets/zameen-updated_1757269388792.csv")
+    data = pd.read_csv("attached_assets/zameen-updated.csv")
     data = data[data['purpose'] == 'For Sale'].copy()
     data = data.dropna(subset=['price', 'location', 'property_type', 'city', 'area_size'])
     
