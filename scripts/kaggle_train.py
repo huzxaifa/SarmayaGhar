@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import os
@@ -101,12 +100,26 @@ def load_and_preprocess_data():
     df = df[df['purpose'] == 'For Sale']
     
     # 2. Outlier Removal & Validation
-    # Room/Area Ratio Validation (Logic from n/data_preprocessing.py)
-    # Ensure area is in Marla (assuming input area_size is Marla if no unit col, but dataset usually has units)
-    # Current dataset likely 'area_size' with mixed units. I'll rely on existing 'area_size' 
-    # assuming it was pre-converted or is standard. 
-    # Note: 'n' script assumes 'Area_in_Marla' exists. Our dataset has 'area_size' and 'area_unit'.
-    # We will assume 'area_size' is the usable value (internal consistency).
+    # Room/Area Ratio Validation
+    # Calculate total rooms
+    total_rooms = df['bedrooms'] + df['baths']
+    
+    # Calculate ratio (Rooms per Marla)
+    # Note: We assume 'area_size' is consistent (Marla) or normalized enough for this heuristic
+    df['rooms_per_marla'] = total_rooms / df['area_size']
+    
+    # Filter based on realistic bounds (0.15 to 1.8 rooms per marla)
+    # Example: 5 Marla house -> 0.75 to 9 rooms (Realistic: 3-6)
+    # Example: 10 Marla house -> 1.5 to 18 rooms (Realistic: 5-8)
+    initial_count = len(df)
+    df = df[
+        (df['rooms_per_marla'] >= 0.15) & 
+        (df['rooms_per_marla'] <= 1.8)
+    ]
+    print(f"Removed {initial_count - len(df)} rows due to unrealistic room/area ratio.")
+    
+    # Drop temp column
+    df = df.drop(columns=['rooms_per_marla'])
     
     # Remove crazy outliers
     df = df[(df['price'] > 100000) & (df['bedrooms'] <= 15) & (df['baths'] <= 15) & (df['area_size'] > 0)]
@@ -242,7 +255,13 @@ def train_and_evaluate(X, y, feature_names, encoders, target_encoder, city_media
                 model_fold.fit(X_fold_train, y_fold_train, eval_set=[(X_fold_val, y_fold_val)])
             else:
                 model_fold.fit(X_fold_train, y_fold_train)
-                
+            
+            if name == 'Linear Regression':
+                print("Intercept (Bias):", model.intercept_)
+                print("Coefficients (Weights):")
+                for feature, weight in zip(feature_names, model.coef_):
+                    print(f"  {feature}: {weight:.4f}")
+        
             # Predict Fold
             y_fold_pred_log = model_fold.predict(X_fold_val)
             y_fold_val_price = np.expm1(y_fold_val)

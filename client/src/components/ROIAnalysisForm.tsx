@@ -18,6 +18,16 @@ const roiAnalysisSchema = z.object({
   areaMarla: z.string().min(1, "Area is required"),
   bedrooms: z.string().min(1, "Number of bedrooms is required"),
   bathrooms: z.string().min(1, "Number of bathrooms is required"),
+}).refine((data) => {
+  const area = parseFloat(data.areaMarla);
+  const rooms = parseInt(data.bedrooms) + parseInt(data.bathrooms);
+  if (isNaN(area) || isNaN(rooms) || area <= 0) return true; // Let field validatiors handle NaN/zero
+
+  const ratio = rooms / area;
+  return ratio >= 0.15 && ratio <= 1.8;
+}, {
+  message: "Invalid Room/Area ratio. Standard is 0.15 to 1.8 rooms per marla.",
+  path: ["areaMarla"], // Highlight area field on error
 });
 
 type ROIAnalysisFormData = z.infer<typeof roiAnalysisSchema>;
@@ -75,6 +85,8 @@ interface ROIAnalysisResult {
   };
   market_insights: {
     city: string;
+    location?: string;
+    price_per_marla?: number;
     market_yield: number;
     market_trend: string;
     recommendation: string;
@@ -84,7 +96,7 @@ interface ROIAnalysisResult {
 // Data based on our actual CSV files
 const CITIES = [
   "Islamabad",
-  "Karachi", 
+  "Karachi",
   "Lahore",
   "Rawalpindi",
   "Faisalabad"
@@ -103,63 +115,63 @@ const PROPERTY_TYPES = [
 // Location data based on our CSV analysis
 const LOCATIONS_BY_CITY = {
   "Islamabad": [
-    "G-10", "E-11", "G-15", "F-10", "Bani Gala", "DHA Defence", "Ghauri Town", 
-    "Korang Town", "F-11", "Diplomatic Enclave", "Bahria Town", "F-6", 
-    "Simly Dam Road", "B-17", "PWD Housing Scheme", "F-8", "G-8", "F-7", 
-    "G-9", "E-7", "F-9", "G-11", "E-8", "F-8/1", "G-13", "E-9", "F-11/1", 
-    "G-12", "E-10", "F-12", "G-14", "E-12", "F-13", "G-16", "E-13", "F-14", 
-    "G-17", "E-14", "F-15", "G-18", "E-15", "F-16", "G-19", "E-16", "F-17", 
+    "G-10", "E-11", "G-15", "F-10", "Bani Gala", "DHA Defence", "Ghauri Town",
+    "Korang Town", "F-11", "Diplomatic Enclave", "Bahria Town", "F-6",
+    "Simly Dam Road", "B-17", "PWD Housing Scheme", "F-8", "G-8", "F-7",
+    "G-9", "E-7", "F-9", "G-11", "E-8", "F-8/1", "G-13", "E-9", "F-11/1",
+    "G-12", "E-10", "F-12", "G-14", "E-12", "F-13", "G-16", "E-13", "F-14",
+    "G-17", "E-14", "F-15", "G-18", "E-15", "F-16", "G-19", "E-16", "F-17",
     "G-20", "E-17", "F-18", "G-21", "E-18", "F-19", "G-22", "E-19", "F-20"
   ],
   "Karachi": [
-    "Cantt", "Gulistan-e-Jauhar", "DHA Defence", "Malir", "Gadap Town", 
-    "Gulshan-e-Iqbal Town", "Scheme 33", "Bath Island", "Abul Hassan Isphani Road", 
-    "Nazimabad", "Falcon Complex Faisal", "Shahra-e-Faisal", "Gizri", "Saddar Town", 
-    "Navy Housing Scheme Karsaz", "Clifton", "Defence", "Gulberg", "North Nazimabad", 
-    "PECHS", "Gulshan-e-Maymar", "Korangi", "Landhi", "Orangi Town", "SITE Area", 
-    "Federal B Area", "Gulshan-e-Hadeed", "Shah Faisal Colony", "Gulistan-e-Sajjad", 
-    "Gulshan-e-Iqbal Block 6", "Gulshan-e-Iqbal Block 2", "Gulshan-e-Iqbal Block 4", 
-    "Gulshan-e-Iqbal Block 8", "Gulshan-e-Iqbal Block 9", "Gulshan-e-Iqbal Block 10", 
-    "Gulshan-e-Iqbal Block 11", "Gulshan-e-Iqbal Block 12", "Gulshan-e-Iqbal Block 13", 
-    "Gulshan-e-Iqbal Block 14", "Gulshan-e-Iqbal Block 15", "Gulshan-e-Iqbal Block 16", 
-    "Gulshan-e-Iqbal Block 17", "Gulshan-e-Iqbal Block 18", "Gulshan-e-Iqbal Block 19", 
-    "Gulshan-e-Iqbal Block 20", "Gulshan-e-Iqbal Block 21", "Gulshan-e-Iqbal Block 22", 
+    "Cantt", "Gulistan-e-Jauhar", "DHA Defence", "Malir", "Gadap Town",
+    "Gulshan-e-Iqbal Town", "Scheme 33", "Bath Island", "Abul Hassan Isphani Road",
+    "Nazimabad", "Falcon Complex Faisal", "Shahra-e-Faisal", "Gizri", "Saddar Town",
+    "Navy Housing Scheme Karsaz", "Clifton", "Defence", "Gulberg", "North Nazimabad",
+    "PECHS", "Gulshan-e-Maymar", "Korangi", "Landhi", "Orangi Town", "SITE Area",
+    "Federal B Area", "Gulshan-e-Hadeed", "Shah Faisal Colony", "Gulistan-e-Sajjad",
+    "Gulshan-e-Iqbal Block 6", "Gulshan-e-Iqbal Block 2", "Gulshan-e-Iqbal Block 4",
+    "Gulshan-e-Iqbal Block 8", "Gulshan-e-Iqbal Block 9", "Gulshan-e-Iqbal Block 10",
+    "Gulshan-e-Iqbal Block 11", "Gulshan-e-Iqbal Block 12", "Gulshan-e-Iqbal Block 13",
+    "Gulshan-e-Iqbal Block 14", "Gulshan-e-Iqbal Block 15", "Gulshan-e-Iqbal Block 16",
+    "Gulshan-e-Iqbal Block 17", "Gulshan-e-Iqbal Block 18", "Gulshan-e-Iqbal Block 19",
+    "Gulshan-e-Iqbal Block 20", "Gulshan-e-Iqbal Block 21", "Gulshan-e-Iqbal Block 22",
     "Gulshan-e-Iqbal Block 23", "Gulshan-e-Iqbal Block 24", "Gulshan-e-Iqbal Block 25"
   ],
   "Lahore": [
-    "Model Town", "Multan Road", "Eden", "Gulberg", "Allama Iqbal Town", 
-    "Military Accounts Housing Society", "EME Society", "Izmir Town", "Upper Mall", 
-    "Park View Villas", "Cavalry Ground", "Bahria Town", "Askari", "Bedian Road", 
-    "Agrics Town", "DHA Phase 1", "DHA Phase 2", "DHA Phase 3", "DHA Phase 4", 
-    "DHA Phase 5", "DHA Phase 6", "DHA Phase 7", "DHA Phase 8", "DHA Phase 9", 
-    "DHA Phase 10", "Johar Town", "Gulberg 1", "Gulberg 2", "Gulberg 3", "Gulberg 4", 
-    "Gulberg 5", "Gulberg 6", "Gulberg 7", "Gulberg 8", "Gulberg 9", "Gulberg 10", 
-    "Gulberg 11", "Gulberg 12", "Gulberg 13", "Gulberg 14", "Gulberg 15", "Gulberg 16", 
-    "Gulberg 17", "Gulberg 18", "Gulberg 19", "Gulberg 20", "Gulberg 21", "Gulberg 22", 
+    "Model Town", "Multan Road", "Eden", "Gulberg", "Allama Iqbal Town",
+    "Military Accounts Housing Society", "EME Society", "Izmir Town", "Upper Mall",
+    "Park View Villas", "Cavalry Ground", "Bahria Town", "Askari", "Bedian Road",
+    "Agrics Town", "DHA Phase 1", "DHA Phase 2", "DHA Phase 3", "DHA Phase 4",
+    "DHA Phase 5", "DHA Phase 6", "DHA Phase 7", "DHA Phase 8", "DHA Phase 9",
+    "DHA Phase 10", "Johar Town", "Gulberg 1", "Gulberg 2", "Gulberg 3", "Gulberg 4",
+    "Gulberg 5", "Gulberg 6", "Gulberg 7", "Gulberg 8", "Gulberg 9", "Gulberg 10",
+    "Gulberg 11", "Gulberg 12", "Gulberg 13", "Gulberg 14", "Gulberg 15", "Gulberg 16",
+    "Gulberg 17", "Gulberg 18", "Gulberg 19", "Gulberg 20", "Gulberg 21", "Gulberg 22",
     "Gulberg 23", "Gulberg 24", "Gulberg 25", "Gulberg 26", "Gulberg 27", "Gulberg 28"
   ],
   "Rawalpindi": [
-    "Humak", "Westridge", "Bahria Town Rawalpindi", "Gulshan Abad", "Media Town", 
-    "Chaklala Scheme", "Police Foundation Housing Scheme", "Chakri Road", "Askari 14", 
-    "Askari 13", "Askari 12", "Judicial Colony", "Askari 10", "Gulshan-e-Iqbal", 
-    "Shalley Valley", "Askari 11", "Askari 15", "Askari 16", "Askari 17", "Askari 18", 
-    "Askari 19", "Askari 20", "Askari 21", "Askari 22", "Askari 23", "Askari 24", 
-    "Askari 25", "Askari 26", "Askari 27", "Askari 28", "Askari 29", "Askari 30", 
-    "Askari 31", "Askari 32", "Askari 33", "Askari 34", "Askari 35", "Askari 36", 
-    "Askari 37", "Askari 38", "Askari 39", "Askari 40", "Askari 41", "Askari 42", 
-    "Askari 43", "Askari 44", "Askari 45", "Askari 46", "Askari 47", "Askari 48", 
+    "Humak", "Westridge", "Bahria Town Rawalpindi", "Gulshan Abad", "Media Town",
+    "Chaklala Scheme", "Police Foundation Housing Scheme", "Chakri Road", "Askari 14",
+    "Askari 13", "Askari 12", "Judicial Colony", "Askari 10", "Gulshan-e-Iqbal",
+    "Shalley Valley", "Askari 11", "Askari 15", "Askari 16", "Askari 17", "Askari 18",
+    "Askari 19", "Askari 20", "Askari 21", "Askari 22", "Askari 23", "Askari 24",
+    "Askari 25", "Askari 26", "Askari 27", "Askari 28", "Askari 29", "Askari 30",
+    "Askari 31", "Askari 32", "Askari 33", "Askari 34", "Askari 35", "Askari 36",
+    "Askari 37", "Askari 38", "Askari 39", "Askari 40", "Askari 41", "Askari 42",
+    "Askari 43", "Askari 44", "Askari 45", "Askari 46", "Askari 47", "Askari 48",
     "Askari 49", "Askari 50", "Askari 51", "Askari 52", "Askari 53", "Askari 54"
   ],
   "Faisalabad": [
-    "Muslim Town", "Millat Town", "Raza Abad", "Satiana Road", "Abdullahpur", 
-    "Wapda City", "Chen One Road", "Paradise Valley", "Ghulam Mohammad Abad", 
-    "Usman Town", "Zulfiqar Colony", "Madina Town", "Gulshan-e-Rafique", "Rachna Town", 
-    "Eden Valley", "Gulberg", "DHA", "Canal View", "Jinnah Colony", "Model Town", 
-    "Allama Iqbal Town", "Gulshan-e-Iqbal", "Johar Town", "Gulberg 1", "Gulberg 2", 
-    "Gulberg 3", "Gulberg 4", "Gulberg 5", "Gulberg 6", "Gulberg 7", "Gulberg 8", 
-    "Gulberg 9", "Gulberg 10", "Gulberg 11", "Gulberg 12", "Gulberg 13", "Gulberg 14", 
-    "Gulberg 15", "Gulberg 16", "Gulberg 17", "Gulberg 18", "Gulberg 19", "Gulberg 20", 
-    "Gulberg 21", "Gulberg 22", "Gulberg 23", "Gulberg 24", "Gulberg 25", "Gulberg 26", 
+    "Muslim Town", "Millat Town", "Raza Abad", "Satiana Road", "Abdullahpur",
+    "Wapda City", "Chen One Road", "Paradise Valley", "Ghulam Mohammad Abad",
+    "Usman Town", "Zulfiqar Colony", "Madina Town", "Gulshan-e-Rafique", "Rachna Town",
+    "Eden Valley", "Gulberg", "DHA", "Canal View", "Jinnah Colony", "Model Town",
+    "Allama Iqbal Town", "Gulshan-e-Iqbal", "Johar Town", "Gulberg 1", "Gulberg 2",
+    "Gulberg 3", "Gulberg 4", "Gulberg 5", "Gulberg 6", "Gulberg 7", "Gulberg 8",
+    "Gulberg 9", "Gulberg 10", "Gulberg 11", "Gulberg 12", "Gulberg 13", "Gulberg 14",
+    "Gulberg 15", "Gulberg 16", "Gulberg 17", "Gulberg 18", "Gulberg 19", "Gulberg 20",
+    "Gulberg 21", "Gulberg 22", "Gulberg 23", "Gulberg 24", "Gulberg 25", "Gulberg 26",
     "Gulberg 27", "Gulberg 28", "Gulberg 29", "Gulberg 30", "Gulberg 31", "Gulberg 32"
   ]
 };
@@ -200,7 +212,7 @@ export default function ROIAnalysisForm() {
   useEffect(() => {
     if (watchedLocation && watchedCity) {
       const cityLocations = LOCATIONS_BY_CITY[watchedCity as keyof typeof LOCATIONS_BY_CITY] || [];
-      const filtered = cityLocations.filter(loc => 
+      const filtered = cityLocations.filter(loc =>
         loc.toLowerCase().includes(watchedLocation.toLowerCase())
       );
       setLocationSuggestions(filtered);
@@ -243,23 +255,23 @@ export default function ROIAnalysisForm() {
       const area_marla = parseFloat(data.areaMarla);
       const bedrooms = parseInt(data.bedrooms);
       const bathrooms = parseInt(data.bathrooms);
-      
+
       // Simulate AI property price prediction (based on area, location, etc.)
       const base_price_per_marla = 600000; // Base price per marla
       const location_multiplier = data.location.includes('DHA') ? 1.5 : data.location.includes('Gulberg') ? 1.3 : 1.0;
       const property_value = base_price_per_marla * area_marla * location_multiplier;
-      
+
       // Simulate AI rent prediction (using your formula: 1% of property value)
       const monthly_rent = property_value / 100;
       const annual_rent = monthly_rent * 12;
-      
+
       // Simulate maintenance costs (typically 0.5-1% of property value annually)
       const annual_maintenance = property_value * 0.0075; // 0.75% of property value
       const net_annual_income = annual_rent - annual_maintenance;
       const property_appreciation = property_value * 0.156578; // 15.6578% per year
       const total_annual_return = net_annual_income + property_appreciation;
       const annual_roi = (total_annual_return / property_value) * 100;
-      
+
       setResult({
         ai_predictions: {
           property_price: property_value,
@@ -356,7 +368,7 @@ export default function ROIAnalysisForm() {
                 <Home className="h-5 w-5 text-blue-600" />
                 Property Details
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* City Selection */}
                 <div className="space-y-2">
@@ -513,7 +525,7 @@ export default function ROIAnalysisForm() {
                 <div>
                   <h4 className="text-sm font-semibold text-blue-900">AI-Powered Analysis</h4>
                   <p className="text-sm text-blue-700 mt-1">
-                    Our AI models will automatically predict the property price and rental income based on your location and property details. 
+                    Our AI models will automatically predict the property price and rental income based on your location and property details.
                     No need to enter financial information - we'll calculate everything for you!
                   </p>
                 </div>
@@ -587,21 +599,21 @@ export default function ROIAnalysisForm() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Badge className={`text-lg px-4 py-2 ${getGradeColor(result.investment_grade.grade)}`}>
-                      Grade {result.investment_grade.grade}
-                    </Badge>
-                    <p className="mt-2 text-sm text-gray-600">{result.investment_grade.recommendation}</p>
-                    <p className="text-sm text-gray-500">Risk Level: {result.investment_grade.risk_level}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-green-600">
-                      {result.current_metrics.annual_roi.toFixed(1)}%
-                    </p>
-                    <p className="text-sm text-gray-600">Annual ROI</p>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Badge className={`text-lg px-4 py-2 ${getGradeColor(result.investment_grade.grade)}`}>
+                    Grade {result.investment_grade.grade}
+                  </Badge>
+                  <p className="mt-2 text-sm text-gray-600">{result.investment_grade.recommendation}</p>
+                  <p className="text-sm text-gray-500">Risk Level: {result.investment_grade.risk_level}</p>
                 </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-green-600">
+                    {result.current_metrics.annual_roi.toFixed(1)}%
+                  </p>
+                  <p className="text-sm text-gray-600">Annual ROI</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

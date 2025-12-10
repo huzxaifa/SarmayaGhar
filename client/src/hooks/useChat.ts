@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { ChatMessage } from "@/lib/types";
@@ -19,9 +19,20 @@ export function useChat() {
     }
   ]);
 
+  // Generate a persistent session ID for this component instance
+  const sessionIdRef = useRef<string>("");
+
+  if (!sessionIdRef.current) {
+    sessionIdRef.current = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  }
+
   const chatMutation = useMutation<ChatResponse, Error, { message: string; context?: any }>({
     mutationFn: async ({ message, context }) => {
-      const response = await apiRequest('POST', '/api/ml/chatbot', { message, context });
+      const response = await apiRequest('POST', '/api/ml/chatbot', {
+        message,
+        context,
+        sessionId: sessionIdRef.current
+      });
       return response.json();
     },
     onSuccess: (data, variables) => {

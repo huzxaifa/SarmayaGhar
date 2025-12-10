@@ -22,6 +22,29 @@ const mlValuationSchema = z.object({
   bedrooms: z.coerce.number().min(1, "At least 1 bedroom required"),
   bathrooms: z.coerce.number().min(1, "At least 1 bathroom required"),
   province: z.string().default("Sindh"),
+}).superRefine((data, ctx) => {
+  const totalRooms = data.bedrooms + data.bathrooms;
+  const ratio = totalRooms / data.areaMarla;
+
+  if (ratio < 0.15) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Heads up! That's a lot of area for so few rooms. (Ratio: ${ratio.toFixed(2)}, Min: 0.15)`,
+      path: ["areaMarla"],
+    });
+  }
+  if (ratio > 1.8) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Unrealistic number of rooms for this area size. (Ratio: ${ratio.toFixed(2)}, Max: 1.8)`,
+      path: ["bedrooms"],
+    });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Unrealistic number of rooms for this area size.`,
+      path: ["bathrooms"],
+    });
+  }
 });
 
 type MLValuationFormData = z.infer<typeof mlValuationSchema>;
@@ -94,11 +117,11 @@ export default function MLValuationForm() {
         // Get model status first
         const modelStatusResponse = await apiRequest('GET', '/api/ml/model-status');
         const modelStatus = await modelStatusResponse.json();
-        
+
         // Get training status
         const trainingResponse = await apiRequest('GET', '/api/ml/training-status');
         const trainingStatusResponse = await trainingResponse.json();
-        
+
         // Consider models ready only if the server reports an in-memory trained model
         setTrainingStatus({
           isTraining: false,
@@ -122,12 +145,12 @@ export default function MLValuationForm() {
       setTrainingStatus(prev => ({ ...prev, isTraining: true }));
       const response = await apiRequest('POST', '/api/ml/train-models');
       const result = await response.json();
-      
+
       if (result.success) {
         // Re-fetch model status after training
         const modelStatusResponse = await apiRequest('GET', '/api/ml/model-status');
         const modelStatus = await modelStatusResponse.json();
-        
+
         setTrainingStatus({
           isTraining: false,
           hasModel: true,
@@ -173,7 +196,7 @@ export default function MLValuationForm() {
           Get instant, accurate property valuations using our advanced machine learning models trained on 168K+ Pakistani real estate records.
         </p>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Valuation Form */}
         <Card>
@@ -211,7 +234,7 @@ export default function MLValuationForm() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="location"
@@ -235,7 +258,7 @@ export default function MLValuationForm() {
                     )}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -261,7 +284,7 @@ export default function MLValuationForm() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="neighbourhood"
@@ -269,9 +292,9 @@ export default function MLValuationForm() {
                       <FormItem>
                         <FormLabel>Neighbourhood</FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="e.g. Phase 6, Block A" 
-                            {...field} 
+                          <Input
+                            placeholder="e.g. Phase 6, Block A"
+                            {...field}
                             data-testid="input-neighbourhood"
                             className="placeholder:text-muted-foreground/70"
                           />
@@ -281,7 +304,7 @@ export default function MLValuationForm() {
                     )}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
                   <FormField
                     control={form.control}
@@ -290,12 +313,12 @@ export default function MLValuationForm() {
                       <FormItem>
                         <FormLabel>Year Built *</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="e.g. 2020" 
-                            min="1950" 
-                            max="2025" 
-                            {...field} 
+                          <Input
+                            type="number"
+                            placeholder="e.g. 2020"
+                            min="1950"
+                            max="2025"
+                            {...field}
                             data-testid="input-year-built"
                             className="placeholder:text-muted-foreground/70"
                           />
@@ -304,7 +327,7 @@ export default function MLValuationForm() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="areaMarla"
@@ -312,11 +335,11 @@ export default function MLValuationForm() {
                       <FormItem>
                         <FormLabel>Area (Marla) *</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="e.g. 5" 
-                            step="0.1" 
-                            {...field} 
+                          <Input
+                            type="number"
+                            placeholder="e.g. 5"
+                            step="0.1"
+                            {...field}
                             data-testid="input-area-marla"
                             className="placeholder:text-muted-foreground/70"
                           />
@@ -325,7 +348,7 @@ export default function MLValuationForm() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="bedrooms"
@@ -350,7 +373,7 @@ export default function MLValuationForm() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="bathrooms"
@@ -376,7 +399,7 @@ export default function MLValuationForm() {
                     )}
                   />
                 </div>
-                
+
                 {/* ML Training Status */}
                 {isCheckingStatus ? (
                   <div className="flex items-center justify-center p-4">
@@ -405,7 +428,7 @@ export default function MLValuationForm() {
                           </div>
                         )}
                       </div>
-                      <Button 
+                      <Button
                         onClick={startTraining}
                         disabled={trainingStatus.isTraining}
                         variant="outline"
@@ -427,7 +450,7 @@ export default function MLValuationForm() {
                     </div>
                     {trainingStatus.isTraining && (
                       <div className="text-sm text-yellow-700">
-                        {trainingStatus.untrainedModels && trainingStatus.untrainedModels.length > 0 
+                        {trainingStatus.untrainedModels && trainingStatus.untrainedModels.length > 0
                           ? `Training missing models: ${trainingStatus.untrainedModels.join(', ')}...`
                           : 'Training multiple ML models (Decision Tree, Random Forest, XGBoost, Deep Learning)...'
                         }
@@ -439,17 +462,17 @@ export default function MLValuationForm() {
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-sm font-medium text-green-800">
-                        ML Models Ready: {trainingStatus.modelInfo?.bestModel} 
+                        ML Models Ready: {trainingStatus.modelInfo?.bestModel}
                         (Accuracy: {((trainingStatus.modelInfo?.accuracy || 0) * 100).toFixed(1)}%)
                       </span>
                     </div>
                   </div>
                 )}
-                
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  size="lg" 
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="lg"
                   disabled={isLoading || !trainingStatus.hasModel}
                   data-testid="button-get-valuation"
                 >
@@ -471,7 +494,7 @@ export default function MLValuationForm() {
             </Form>
           </CardContent>
         </Card>
-        
+
         {/* Valuation Results */}
         <Card>
           <CardHeader>
@@ -493,7 +516,7 @@ export default function MLValuationForm() {
                     Range: {formatCurrency(result.priceRange.min)} - {formatCurrency(result.priceRange.max)}
                   </div>
                 </div>
-                
+
                 {/* Confidence Score */}
                 <div className="bg-muted rounded-lg p-6">
                   <div className="flex justify-between items-center mb-3">
@@ -503,13 +526,13 @@ export default function MLValuationForm() {
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-green-600 h-3 rounded-full" 
+                    <div
+                      className="bg-green-600 h-3 rounded-full"
                       style={{ width: `${result.confidence}%` }}
                     ></div>
                   </div>
                 </div>
-                
+
                 {/* Key Metrics */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-primary/10 rounded-lg p-4 text-center">
@@ -525,11 +548,11 @@ export default function MLValuationForm() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Future Predictions */}
                 <div className="space-y-4">
                   <h4 className="font-semibold text-primary">Price Predictions</h4>
-                  
+
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-blue-50 rounded-lg p-3 text-center">
                       <div className="text-xs text-muted-foreground mb-1">Current</div>
@@ -557,7 +580,7 @@ export default function MLValuationForm() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Comparable Properties */}
                 <div className="space-y-4">
                   <h4 className="font-semibold text-primary flex items-center gap-2">
@@ -582,7 +605,7 @@ export default function MLValuationForm() {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* AI Insights */}
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                   <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">

@@ -9,6 +9,7 @@ import joblib
 import json
 import os
 import warnings
+import lightgbm as lgb
 warnings.filterwarnings('ignore')
 
 class PayloadValidator:

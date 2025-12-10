@@ -161,9 +161,12 @@ export class MLTrainingService {
   // Check which models are already trained locally
   public getTrainedModels(): { name: string; trained: boolean; path?: string; accuracy?: number }[] {
     // First check sklearn models
+    let trainedModelsList: { name: string; trained: boolean; path?: string; accuracy?: number }[] = [];
+
+    // First get sklearn models
     if (sklearnModelManager.hasModels()) {
       const sklearnStatus = sklearnModelManager.getModelStatus();
-      return sklearnStatus.trainedModels.map(model => ({
+      trainedModelsList = sklearnStatus.trainedModels.map(model => ({
         name: model.name,
         trained: model.trained,
         accuracy: model.accuracy
@@ -175,6 +178,7 @@ export class MLTrainingService {
       'Random Forest',
       'Gradient Boosting',
       'XGBoost',
+      'LightGBM',
       'Deep Learning'
     ];
     const result = allModels.map(modelName => {
@@ -186,7 +190,7 @@ export class MLTrainingService {
 
       // If metadata exists try to parse it; if parse fails (for example
       // when Git LFS pointer is present) fall back to checking for model
-      // artifacts on disk (model.json / weights.bin).
+      // artifacts on disk.
       if (fs.existsSync(metadataPath)) {
         try {
           const metadataRaw = fs.readFileSync(metadataPath, 'utf8');
@@ -202,13 +206,11 @@ export class MLTrainingService {
         }
       }
 
-      // If model artifacts exist, consider the model trained even if
-      // metadata.json couldn't be parsed (common when using Git LFS)
+      // Check for common model artifacts
       if (fs.existsSync(modelJsonPath) || fs.existsSync(weightsPath) || fs.existsSync(modelDir)) {
-        // modelDir existence alone might be from a leftover folder; ensure
-        // it contains meaningful artifacts where possible (not Git LFS pointers)
         let hasArtifacts = false;
 
+        // Check for TensorFlow.js artifacts
         if (fs.existsSync(modelJsonPath) && !this.isGitLfsPointer(modelJsonPath)) {
           hasArtifacts = true;
         }
@@ -216,13 +218,25 @@ export class MLTrainingService {
         if (!hasArtifacts && fs.existsSync(weightsPath) && !this.isGitLfsPointer(weightsPath)) {
           try {
             const stat = fs.statSync(weightsPath);
-            // consider weights present if size > 1KB
             if (stat.size > 1024) hasArtifacts = true;
           } catch (_) { }
         }
 
+        // Check for Python/Joblib artifacts (.pkl)
         if (!hasArtifacts) {
-          // check for any non-pointer files in dir
+          try {
+            const files = fs.readdirSync(modelDir);
+            for (const f of files) {
+              if (f.endsWith('.pkl') && !this.isGitLfsPointer(path.join(modelDir, f))) {
+                hasArtifacts = true;
+                break;
+              }
+            }
+          } catch (_) { }
+        }
+
+        if (!hasArtifacts) {
+          // check for any non-pointer files in dir as last resort
           try {
             const files = fs.readdirSync(modelDir);
             for (const f of files) {
@@ -236,7 +250,6 @@ export class MLTrainingService {
         }
 
         if (hasArtifacts) {
-          // Try to read accuracy from metadata if present, otherwise leave undefined
           let accuracy: number | undefined = undefined;
           try {
             if (fs.existsSync(metadataPath)) {
@@ -263,7 +276,17 @@ export class MLTrainingService {
       };
     });
 
-    return result;
+    // Merge lists, avoiding duplicates (prefer sklearn if exists, or just keep both if names differ)
+    // Actually, let's just append the ones from disk that aren't already in sklearn list
+    const existingNames = new Set(trainedModelsList.map(m => m.name));
+
+    for (const model of result) {
+      if (!existingNames.has(model.name)) {
+        trainedModelsList.push(model);
+      }
+    }
+
+    return trainedModelsList;
   }
 
   // Get list of models that need to be trained

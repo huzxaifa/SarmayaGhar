@@ -29,25 +29,25 @@ async function checkOllamaAvailability(): Promise<boolean> {
       .replace('/v1', '')
       .replace(/\/+$/, '') || 'http://127.0.0.1:11434';
     const url = `${baseUrl}/api/tags`;
-    
+
     console.log(`[DEBUG] Checking Ollama availability at: ${url}`);
-    
+
     const response = await fetch(url);
     if (!response.ok) {
       console.error(`Ollama API returned status ${response.status} for ${url}`);
       return false;
     }
-    
+
     const data = await response.json() as { models?: Array<{ name?: string }> };
     const hasModels = (data.models?.length ?? 0) > 0;
-    
+
     if (hasModels) {
       console.log(`✅ Found ${data.models!.length} model(s) in Ollama`);
       console.log(`[DEBUG] Models: ${data.models!.map(m => m.name).join(', ')}`);
     } else {
       console.warn("⚠️ Ollama is running but no models found");
     }
-    
+
     return hasModels;
   } catch (error: any) {
     console.error("Ollama availability check error:", error?.message || error);
@@ -70,19 +70,38 @@ checkOllamaAvailability().then(available => {
   }
 });
 
+import { dataContext } from "./dataContext.js";
+
+// Session storage (Simple in-memory Map for now)
+interface ChatSession {
+  history: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  lastActive: number;
+}
+const sessions = new Map<string, ChatSession>();
+
+// Cleanup old sessions every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, session] of sessions.entries()) {
+    if (now - session.lastActive > 1000 * 60 * 60) { // 1 hour timeout
+      sessions.delete(id);
+    }
+  }
+}, 1000 * 60 * 60);
+
 export interface ChatResponse {
   message: string;
   suggestions?: string[];
 }
 
-export async function getChatResponse(message: string, _context?: any): Promise<ChatResponse> {
+export async function getChatResponse(message: string, _context?: any, sessionId?: string): Promise<ChatResponse> {
   // Check if Ollama is available
   const isAvailable = await checkOllamaAvailability();
-  
+
   if (!isAvailable) {
     console.warn("Ollama not available. Using fallback response.");
     return {
-      message: "I'm currently unable to connect to the AI service. Please ensure Ollama is installed and running. You can install it from https://ollama.ai and run 'ollama pull llama3.2:3b'. I can still help you with property valuations and market analysis through our ML models.",
+      message: "I'm currently unable to connect to the AI service. Please ensure Ollama is installed and running. I can still help you with property valuations and market analysis through our ML models.",
       suggestions: [
         "Try our property valuation tool",
         "Check market insights",
@@ -93,18 +112,31 @@ export async function getChatResponse(message: string, _context?: any): Promise<
   }
 
   try {
-    const systemPrompt = `You are SarmayaGhar AI, an expert real estate investment advisor for the Pakistani market. You specialize in:
+    // 1. Get or Initialize Session
+    let session = sessionId ? sessions.get(sessionId) : null;
 
-1. Property valuation and market analysis
-2. Investment strategies and ROI calculations
-3. Rental yield predictions
-4. Market trends and predictions
-5. Pakistani real estate regulations and taxes
-6. Location-specific advice for Karachi, Lahore, and Islamabad
+    // If no session exists (or no ID provided, though we should try to provide one), start fresh
+    if (!session && sessionId) {
+      session = {
+        history: [],
+        lastActive: Date.now()
+      };
+      sessions.set(sessionId, session);
+    }
 
-Always provide practical, actionable advice based on current Pakistani real estate market conditions. Use PKR currency and local units (marla, kanal). Be concise but informative.
+    // 2. Prepare System Prompt with REAL DATA Context
+    const dataStats = dataContext.getContext();
 
-Context: Pakistani real estate market is recovering in 2025 with interest rates dropping from 22% to 12-13%. Property values are expected to rise 10-15% annually.
+    const systemPrompt = `You are SarmayaGhar AI, an expert real estate investment advisor for the Pakistani market.
+    
+CONTEXT & KNOWLEDGE BASE:
+${dataStats}
+
+ROLE & INSTRUCTIONS:
+1. Use the REAL ESTATE DATASET CONTEXT provided above to answer questions about average prices and trends.
+2. If the user asks about a specific city or area mentioned in the context, quote the stats.
+3. Be concise, professional, and helpful.
+4. Support your advice with the data provided.
 
 IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {
@@ -114,12 +146,37 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
 
 Do not include any text before or after the JSON.`;
 
-    const response = await ollama.chat.completions.create({
-      model: OLLAMA_MODEL,
-      messages: [
+    // 3. Construct Messages List
+    let messages: any[] = [];
+
+    if (session) {
+      // Update last active
+      session.lastActive = Date.now();
+
+      // If history is empty, add system prompt
+      if (session.history.length === 0) {
+        session.history.push({ role: "system", content: systemPrompt });
+      } else {
+        // Update the system prompt in case data context changed (optional, but good practice)
+        session.history[0] = { role: "system", content: systemPrompt };
+      }
+
+      // Add user message to history
+      session.history.push({ role: "user", content: message });
+
+      // Use full history
+      messages = session.history;
+    } else {
+      // Stateless fallback
+      messages = [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
-      ],
+      ];
+    }
+
+    const response = await ollama.chat.completions.create({
+      model: OLLAMA_MODEL,
+      messages: messages,
       temperature: 0.7,
       max_tokens: 500,
     });
@@ -136,16 +193,14 @@ Do not include any text before or after the JSON.`;
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[0]);
       } else {
-        // If no JSON found, treat entire response as message
         parsed = { message: content };
       }
     } catch (parseError) {
-      // If JSON parsing fails, use the content as message
       console.warn("Failed to parse JSON response, using raw content:", parseError);
       parsed = { message: content };
     }
-    
-    return {
+
+    const finalResponse = {
       message: parsed.message || parsed.response || content,
       suggestions: parsed.suggestions || [
         "Best ROI areas in major cities?",
@@ -154,9 +209,25 @@ Do not include any text before or after the JSON.`;
         "Property tax implications?"
       ]
     };
+
+    // 4. Save Assistant Response to History
+    if (session) {
+      session.history.push({ role: "assistant", content: finalResponse.message });
+
+      // Limit history length to prevent context overflow (keep last 10 turns + system prompt)
+      if (session.history.length > 21) {
+        session.history = [
+          session.history[0], // Keep system prompt
+          ...session.history.slice(-20) // Keep last 20 messages
+        ];
+      }
+    }
+
+    return finalResponse;
+
   } catch (error: any) {
     console.error("Ollama API error:", error);
-    
+
     // Enhanced fallback response
     const fallbackResponses = {
       "investment": "For investment advice, I recommend checking our property valuation tool and market insights. Premium areas like DHA, Clifton, and Gulberg typically offer good ROI.",
@@ -167,7 +238,7 @@ Do not include any text before or after the JSON.`;
 
     let responseMessage = fallbackResponses.default;
     const lowerMessage = message.toLowerCase();
-    
+
     if (lowerMessage.includes("investment") || lowerMessage.includes("roi")) {
       responseMessage = fallbackResponses.investment;
     } else if (lowerMessage.includes("valuation") || lowerMessage.includes("price")) {
@@ -175,7 +246,7 @@ Do not include any text before or after the JSON.`;
     } else if (lowerMessage.includes("market") || lowerMessage.includes("trend")) {
       responseMessage = fallbackResponses.market;
     }
-    
+
     return {
       message: responseMessage,
       suggestions: [
@@ -191,7 +262,7 @@ Do not include any text before or after the JSON.`;
 export async function analyzePakistaniPropertyMarket(propertyData: any): Promise<any> {
   // Check if Ollama is available
   const isAvailable = await checkOllamaAvailability();
-  
+
   if (!isAvailable) {
     console.warn("Ollama not available for property analysis. Using fallback analysis.");
     return {

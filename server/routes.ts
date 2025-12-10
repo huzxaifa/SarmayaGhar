@@ -319,19 +319,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Chat routes
   app.post("/api/ml/chatbot", async (req, res) => {
     try {
-      const { message, context } = req.body;
+      const { message, context, sessionId } = req.body;
 
       if (!message) {
         return res.status(400).json({ message: "Message is required" });
       }
 
-      const response = await getChatResponse(message, context);
+      const response = await getChatResponse(message, context, sessionId);
 
       // Store chat message
       await storage.createChatMessage({
         message,
         response: response.message,
-        context,
+        context: context || { sessionId },
       });
 
       res.json(response);
